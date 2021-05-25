@@ -27,6 +27,8 @@
     char str21[10] = "a";
     char str22[10] = "d";
 
+int First[9][20];// First Set 18 is '$' 19 is 'null'
+int Follow[9][20];//18 is '$'
 
 struct Item{
     int head;//头编号
@@ -37,7 +39,7 @@ struct Item{
 struct Item  I[23];//23个生成式项
 
 struct ISet{//一个状态的项集
-    int SetItem[23];
+    int SetItem[23][10];
     int validItem[23];
     int conf;//存在冲突
 };
@@ -45,8 +47,10 @@ struct ISet{//一个状态的项集
 void InitISet(struct ISet *in){
     in->conf = 0;
     for(int i=0;i<23;i++){
-        in->validItem[i] = 0;
-        in->SetItem[i] = 0;
+            for(int j=0;j<10;j++){
+                in->validItem[i] = 0;
+                in->SetItem[i][j] = 0;
+            }
     }
 }
 
@@ -54,12 +58,19 @@ struct ISet Status[200];//所有状态
 int status_num = 0;//状态数目
 
 struct Action{
-    char msg[10];
+    int status_code;//0 for error 1 for normal 2 for acc
     int movein;//为1表示移入
     int movenum;//表示移入的状态
     int reduce;//为1表示规约
     int reducelen;//回退长度
 };
+
+struct StatusStack{
+    int StatStack[200];
+    int topptr;
+};
+
+struct StatusStack SStack;
 
 int GOTO[200][27];//GOTO表，描述状态转移
 struct Action ACT[200][27];
@@ -93,6 +104,8 @@ switch (a){
     case 24: return 'e';//e = if
     case 25: return 'f';//f = else
     case 26: return 'g';//g = while
+    case 27: return '$';
+    case 28: return 'n';//n = null
 }
 return ' ';
 }
@@ -162,8 +175,10 @@ switch (a){
 
 int SetEqual(struct ISet* in1,struct ISet* in2){
     for(int i=0;i<23;i++){
-        if((in1->SetItem[i] != in2->SetItem[i])&&(in1->validItem[i] == 1)||(in1->validItem[i] != in2->validItem[i])){
+            for(int j=0;j<10;j++){
+        if(((in1->SetItem[i][j] != in2->SetItem[i][j])&&(in1->validItem[i] == 1))||(in1->validItem[i]!=in2->validItem[i])){
             return 0;//0表示不相等
+        }
         }
     }
     return 1;//1表示相等
@@ -171,8 +186,10 @@ int SetEqual(struct ISet* in1,struct ISet* in2){
 
 void SetCopy(struct ISet* in1,struct ISet* in2){
     for(int i=0;i<23;i++){
-        in1->SetItem[i] = in2->SetItem[i];
-        in1->validItem[i] = in2->validItem[i];
+            for(int j=0;j<10;j++){
+                in1->SetItem[i][j] = in2->SetItem[i][j];
+                in1->validItem[i] = in2->validItem[i];
+            }
     }
     in1->conf = in2->conf;
 }
@@ -180,26 +197,29 @@ void SetCopy(struct ISet* in1,struct ISet* in2){
 void CLOSURE(struct ISet* in){
     int num=0;
     for(int i=0;i<23;i++){
-        if(in->validItem[i] == 1)
-            num++;
+            if(in->validItem[i] == 1)
+                num++;
     }
     int newnum;
     do{
         newnum = num;
         for(int i=0;i<23;i++){
             if(in->validItem[i] == 1){//存在该项
-                if(in->SetItem[i]<I[i].len){
-                        char c1 = I[i].body[in->SetItem[i]];
+                for(int k=0;k<10;k++){
+                if((k<I[i].len)&&(in->SetItem[i][k]==1)){
+                    char c1 = I[i].body[k];
                     for(int j=0;j<23;j++){//存在产生式头部为非终极符号
                         int headnum = I[j].head;
                         char c2 = Int2Sym(headnum);
                         if(c2 == c1){
-                            if(in->validItem[j] == 0){
+                            if((in->validItem[j] == 0) || (in->SetItem[j][0] == 0)){
                                 newnum++;
                                 in->validItem[j] = 1;
+                                in->SetItem[j][0] = 1;
                             }
                         }
                     }
+                }
                 }
             }
         }
@@ -214,21 +234,36 @@ void CLOSURE(struct ISet* in){
 int SetValid(struct ISet* in){
     int a=0;
     for(int i=0;i<23;i++){
-        if((in->validItem[i] == 1)&&(in->SetItem[i] != I[i].len)){
+        for(int j=0;j<10;j++)
+        if((in->validItem[i] == 1)&&(in->SetItem[i][j] == 1)){
             a=1;
         }
     }
     return a;
 }
 
+int ItemValid(struct ISet* in,int j){//若in在j项有效，返回1
+    int a=0;
+    for(int i=0;i<=I[j].len;i++){
+        a = a+in->SetItem[j][i];
+    }
+    if(a == 0){
+        return 0;
+    }
+    return 1;
+}
+
 void PrintI(struct ISet* in){
     for(int k=0;k<23;k++){//打印第k个表达式
         if(in->validItem[k] == 1){
-            printf("%d:",k);
+            for(int i=0;i<10;i++){
+            if(in->SetItem[k][i] == 1){
+            //printf("%d:",k);
+            //printf("i: %d:",i);
             printf("%c->",Int2Sym(I[k].head));
             //printf("S:%s\n",I[k].body);
             for(int m=0;m<I[k].len;m++){
-                if(m==in->SetItem[k]){
+                if(m==i){
                     printf("%c",'.');
                     //printf("%c",I[k].body[0]);
                     Convert(I[k].body[m]);
@@ -240,11 +275,25 @@ void PrintI(struct ISet* in){
             }
             printf("\n");
         }
+        }
+        }
     }
 }
 
 void Init(){//初始化
-    memset(GOTO,0,sizeof(GOTO));
+    memset(GOTO,-1,sizeof(GOTO));
+    memset(First,0,sizeof(First));
+    memset(Follow,0,sizeof(Follow));
+
+    memset(SStack.StatStack,0,sizeof(SStack.StatStack));
+    SStack.topptr = 0;
+
+// init Action table
+    ACT
+
+    First[2][19] = 1;
+    Follow[0][18] = 1;
+
     I[0].head = 0;
     strcpy(I[0].body , str);
     I[0].len = strlen(str);
@@ -287,10 +336,10 @@ void Init(){//初始化
     I[13].head = 5;
     strcpy(I[13].body , str13);
     I[13].len = strlen(str13);
-    I[14].head = 5;
+    I[14].head = 6;
     strcpy(I[14].body , str14);
     I[14].len = strlen(str14);
-    I[15].head = 5;
+    I[15].head = 6;
     strcpy(I[15].body , str15);
     I[15].len = strlen(str15);
     I[16].head = 6;
@@ -315,12 +364,12 @@ void Init(){//初始化
     strcpy(I[22].body , str22);
     I[22].len = strlen(str22);
 
-
-
     for(int i=0;i<200;i++){
             for(int j=0;j<23;j++){
-                Status[i].SetItem[j] = 0;
                 Status[i].validItem[j] = 0;
+                for(int k=0;k<10;k++){
+                Status[i].SetItem[j][k] = 0;
+                }
             }
     }
 
@@ -334,7 +383,12 @@ void Init(){//初始化
         ACT[i][j].reducelen = 0;
     }
    }
+   for(int i=0;i<200;i++){
+    InitISet(&Status[i]);
+   }
+
    Status[0].validItem[0] = 1;
+   Status[0].SetItem[0][0] = 1;
    //Status[0].validItem[1] = 1;
    //Status[0].validItem[2] = 1;
    //Status[0].validItem[4] = 1;
@@ -346,11 +400,182 @@ void Init(){//初始化
    //Status[0].validItem[10]= 1;
 }
 
+void MergeFirst(int i,int j){//merge j to i
+    for(int k=0;k<19;k++){
+        if(First[j][k] == 1){
+            First[i][k] = 1;
+        }
+    }
+}
+
+void MergeFollow(int i,int j){//merge j to i
+    //printf("mergeFollow:%c %c\n",Int2Sym(i),Int2Sym(j));
+    for(int k=0;k<19;k++){
+        if(Follow[j][k] == 1){
+            Follow[i][k] = 1;
+        }
+    }
+}
+
+void MergeFollowFirst(int i,int j){//merge j to i
+    //printf("mergeFollowFirst:%c %c\n",Int2Sym(i),Int2Sym(j));
+    for(int k=0;k<19;k++){
+        if(First[j][k] == 1){
+            Follow[i][k] = 1;
+        }
+    }
+}
+
+int CalFirst(){
+    int num=0;
+    for(int i=0;i<9;i++){
+        for(int j=0;j<20;j++){
+            if(First[i][j] == 1){
+                num++;
+            }
+        }
+    }
+    //printf("%d\n",num);
+    return num;
+}
+
+int CalFollow(){
+    int num=0;
+    for(int i=0;i<9;i++){
+        for(int j=0;j<20;j++){
+            if(Follow[i][j] == 1){
+                num++;
+            }
+        }
+    }
+    //printf("%d\n",num);
+    return num;
+}
+
+
+void GetFirst(){
+    for(int i=0;i<23;i++){
+            char c = I[i].body[0];
+            int number = Sym2Int(c);
+            if(number>8){
+                First[I[i].head][number-9] = 1;
+            }
+    }
+    int oldnum = CalFirst();
+    int truenum = oldnum;
+
+    do{
+        oldnum = truenum;
+        for(int i=0;i<23;i++){
+            for(int j=0;j<I[i].len;j++){
+                char c= I[i].body[j];
+                int number = Sym2Int(c);
+                if(number > 8){
+                    First[I[i].head][number-9] = 1;
+                    break;
+                }
+                else{
+                    MergeFirst(I[i].head,number);
+                    if(First[number][19] != 1){
+                        break;
+                    }
+                }
+                    if(j == I[i].len - 1){
+                            if(First[j][19] == 1){
+                                First[I[i].head][19] = 1;
+                            }
+
+                    }
+            }
+
+        }
+    truenum = CalFirst();
+    //printf("truenum:%d  oldnum:%d \n",truenum,oldnum);
+    }while(truenum != oldnum);
+}
+
+void GetFollow(){
+    for(int i=0;i<23;i++){
+            for(int j=0;j<I[i].len-1;j++){
+                char c1 = I[i].body[j];
+                char c2 = I[i].body[j+1];
+                int number1 = Sym2Int(c1);
+                int number2 = Sym2Int(c2);
+                if((number1 < 9) && (number2 > 8)){
+                    Follow[number1][number2-9] = 1;
+                    printf("add %c to %c\n",Int2Sym(number2),Int2Sym(number1));
+            }
+
+            }
+    }
+    int oldnum = CalFollow();
+    int truenum = oldnum;
+
+    do{
+        oldnum = truenum;
+        for(int i=0;i<23;i++){
+            for(int j=0;j<I[i].len-1;j++){
+                char c1 = I[i].body[j];
+                char c2 = I[i].body[j+1];
+                int number1 = Sym2Int(c1);
+                int number2 = Sym2Int(c2);
+                if((number1 < 9)&&(number2 < 9)){
+                    MergeFollowFirst(number1,number2);
+                    for(int k=number2;k<I[i].len-1;k++){
+                        if(First[k][19] == 1){
+                            MergeFollowFirst(number1,k+1);
+                            if(k == I[i].len-2){
+                                if(First[k+1][19] == 1){
+                                    MergeFollow(number1,I[i].head);
+                                }
+                            }
+                        }
+                        else{
+                            break;
+                        }
+
+                    }
+                }
+
+            }
+            char c3 = I[i].body[I[i].len-1];
+            int num = Sym2Int(c3);
+            if(num<9){
+                MergeFollow(num,I[i].head);
+            }
+
+        }
+    truenum = CalFollow();
+    //printf("truenum:%d  oldnum:%d \n",truenum,oldnum);
+    }while(truenum != oldnum);
+}
 
 
 int main()
 {
     Init();
+    GetFirst();
+    GetFollow();
+/*
+    for(int i=0;i<9;i++){
+        printf("第%d的First集：\n",i);
+        for(int j=0;j<20;j++){
+            printf("%d ",First[i][j]);
+        }
+        printf("\n");
+    }
+*/
+/*
+    for(int i=0;i<9;i++){
+        printf("%c的Follow集：\n",Int2Sym(i));
+        for(int j=0;j<20;j++){
+                if(Follow[i][j] ==1){
+                   printf("%c ",Int2Sym(j+9));
+                }
+        }
+        printf("\n");
+    }
+*/
 /*
     for(int i=0;i<23;i++){
     printf("len:%d\n",I[i].len);
@@ -360,8 +585,20 @@ int main()
 */
 //初始化
     CLOSURE(&Status[0]);
+    /*
+    for(int i=0;i<23;i++){
+        printf("%d:validItem  ",i);
+        printf("%d\n",Status[0].validItem[i]);
+        for(int j=0;j<10;j++){
+            printf("%d ",Status[0].SetItem[i][j]);
+        }
+        printf("\n");
+    }
+    */
+    PrintI(&Status[0]);
 
     int status_num_old;
+
     do{
     status_num_old = status_num;
     for(int sta_num = 0;sta_num <= status_num;sta_num++){//遍历所有状态
@@ -370,68 +607,83 @@ int main()
             SetCopy(&TempSet,&Status[sta_num]);
             //去除移动到末尾的式子并标记规约
             for(int j=0;j<23;j++){
-                if(TempSet.SetItem[j] == I[j].len){
-                    TempSet.validItem[j]=0;
-                    TempSet.SetItem[j]=0;
+                if(TempSet.SetItem[j][I[j].len] == 1){
+                    TempSet.SetItem[j][I[j].len]=0;
+                    if(ItemValid(&TempSet,j)==0){
+                       TempSet.validItem[j]=0;
+                    }
                 }
             }
-            //debug
-            //printf("%d:",status_num);
-            //printf("body:%s\n",I[1].body);
-
             char c = Int2Sym(i);
             for(int j=0;j<23;j++){//该符号读入后的情况
-                int pos = Status[sta_num].SetItem[j];
+                for(int ind=0;ind<10;ind++)
+                {
+                if(Status[sta_num].SetItem[j][ind] == 1){
+                int pos = ind;
                 if((Status[sta_num].validItem[j])&&(pos < I[j].len)&&(I[j].body[pos] == c)){
-                    TempSet.SetItem[j] =pos+1;
+                    TempSet.SetItem[j][pos+1] =1;
+                    TempSet.SetItem[j][pos]   =0;
                 }
                 else{
-                    TempSet.validItem[j] =0;
+                    //TempSet.validItem[j] =0;
+                    TempSet.SetItem[j][pos]   =0;
                 }
+            }
+            if(ItemValid(&TempSet,j)==0){
+                TempSet.validItem[j] =0;
+            }
+            }
             }
             CLOSURE(&TempSet);
             int exist = 0;//该状态不存在
+            int matchSet = 0;//Set turned to
             for(int sta_num2 = 0;sta_num2 <= status_num;sta_num2++){
                 if(SetEqual(&Status[sta_num2],&TempSet)){
                     exist = 1;
                     //printf("存在%d相同",sta_num2);
+                    matchSet = sta_num2;
                     break;
                 }
             }
             if(exist == 0){
                     if(SetValid(&TempSet) == 1){
                     status_num++;
+                    GOTO[sta_num][i] = status_num;
                     SetCopy(&Status[status_num],&TempSet);
-                    printf("%d\n",status_num);
-                    PrintI(&Status[status_num]);
-                    printf("\n");
+                    //printf("from status %d\n",sta_num);
+                    //printf("%d\n",status_num);
+                    //PrintI(&Status[status_num]);
+                    //printf("\n");
                     }
 
             }
+            else{
+            	GOTO[sta_num][i] = matchSet;
+            }
         }
     }
-            for(int i=0;i<23;i++){
-    printf("len:%d\n",I[i].len);
-    printf("head:%d\n",I[i].head);
-    printf("body:%s\n",I[i].body);
-        }
-
     }while(status_num != status_num_old);
 
     /*
 for(int i=0;i<23;i++){
-    printf("validItem:%d\n",Status[0].validItem[i]);
+    printf("validItem:%d\n",Status[0].validItem[i]);s
     printf("SetItem:%d\n",Status[0].SetItem[i]);
 }
 */
     //PrintI(&Status[0]);
-/*
+
 for(int i=0;i<=status_num;i++){
     printf("第%d组\n",i);
     PrintI(&Status[i]);
     printf("\n");
 }
-*/
+
+for(int i=0;i<=status_num;i++){
+	for(int j=0;j<27;j++){
+		printf("%2d ",GOTO[i][j] );
+	}
+	printf("\n");
+}
 
     return 0;
 }
