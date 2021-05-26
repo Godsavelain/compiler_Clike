@@ -13,7 +13,7 @@ int parse_pos=0;//the position of the current symbol under parse
     char str3[10] = "S";
     char str4[10] = "b";
     char str5[10] = "c";
-    char str6[10] = "a=E";
+    char str6[10] = "a=E;";
     char str7[10] = "e(C)S";
     char str8[10] = "e(C)SfS";
     char str9[10] = "g(C)S";
@@ -30,6 +30,7 @@ int parse_pos=0;//the position of the current symbol under parse
     char str20[10] = "(E)";
     char str21[10] = "a";
     char str22[10] = "d";
+    char str23[10] = "La;";
 
 int First[9][20];// First Set 18 is '$' 19 is 'null'
 int Follow[9][20];//18 is '$'
@@ -40,18 +41,18 @@ struct Item{
     int len;//长度
 };
 
-struct Item  I[23];//23个生成式项
+struct Item  I[24];//23个生成式项
 
 struct ISet{//一个状态的项集
-    int SetItem[23][10];
-    int validItem[23];
+    int SetItem[24][10];
+    int validItem[24];
     int conf;//存在冲突
     int reducehead;//if exist item which can be reduced,record its head num
 };
 
 void InitISet(struct ISet *in){
     in->conf = 0;
-    for(int i=0;i<23;i++){
+    for(int i=0;i<24;i++){
             for(int j=0;j<10;j++){
                 in->validItem[i] = 0;
                 in->SetItem[i][j] = 0;
@@ -77,16 +78,20 @@ struct StatusStack{
 
 struct StatusStack SStack;
 int GetStackTop(){
-    return SStack.StatStack[SStack.topptr];
+    return SStack.StatStack[SStack.topptr-1];
 }
 
 int PopStack(int n){
+    int a = SStack.topptr;
     SStack.topptr = SStack.topptr-n;
+    //printf("ptr sub from %d to %d\n",a,SStack.topptr);
 }
 
 void PushStack(int n){
+    int a = SStack.topptr;
     SStack.StatStack[SStack.topptr] = n;
-    SStack.topptr = SStack.topptr++;
+    SStack.topptr = SStack.topptr+1;
+    //printf("ptr add from %d to %d\n",a,SStack.topptr);
 }
 
 char GetNextSym(){//get next symbol to be parsed
@@ -197,7 +202,7 @@ switch (a){
 }
 
 int SetEqual(struct ISet* in1,struct ISet* in2){
-    for(int i=0;i<23;i++){
+    for(int i=0;i<24;i++){
             for(int j=0;j<10;j++){
         if(((in1->SetItem[i][j] != in2->SetItem[i][j])&&(in1->validItem[i] == 1))||(in1->validItem[i]!=in2->validItem[i])){
             return 0;//0表示不相等
@@ -208,7 +213,7 @@ int SetEqual(struct ISet* in1,struct ISet* in2){
 }
 
 void SetCopy(struct ISet* in1,struct ISet* in2){
-    for(int i=0;i<23;i++){
+    for(int i=0;i<24;i++){
             for(int j=0;j<10;j++){
                 in1->SetItem[i][j] = in2->SetItem[i][j];
                 in1->validItem[i] = in2->validItem[i];
@@ -219,19 +224,19 @@ void SetCopy(struct ISet* in1,struct ISet* in2){
 
 void CLOSURE(struct ISet* in){
     int num=0;
-    for(int i=0;i<23;i++){
+    for(int i=0;i<24;i++){
             if(in->validItem[i] == 1)
                 num++;
     }
     int newnum;
     do{
         newnum = num;
-        for(int i=0;i<23;i++){
+        for(int i=0;i<24;i++){
             if(in->validItem[i] == 1){//存在该项
                 for(int k=0;k<10;k++){
                 if((k<I[i].len)&&(in->SetItem[i][k]==1)){
                     char c1 = I[i].body[k];
-                    for(int j=0;j<23;j++){//存在产生式头部为非终极符号
+                    for(int j=0;j<24;j++){//存在产生式头部为非终极符号
                         int headnum = I[j].head;
                         char c2 = Int2Sym(headnum);
                         if(c2 == c1){
@@ -256,7 +261,7 @@ void CLOSURE(struct ISet* in){
 
 int SetValid(struct ISet* in){
     int a=0;
-    for(int i=0;i<23;i++){
+    for(int i=0;i<24;i++){
         for(int j=0;j<10;j++)
         if((in->validItem[i] == 1)&&(in->SetItem[i][j] == 1)){
             a=1;
@@ -277,7 +282,7 @@ int ItemValid(struct ISet* in,int j){//若in在j项有效，返回1
 }
 
 void PrintI(struct ISet* in){
-    for(int k=0;k<23;k++){//打印第k个表达式
+    for(int k=0;k<24;k++){//打印第k个表达式
         if(in->validItem[k] == 1){
             for(int i=0;i<10;i++){
             if(in->SetItem[k][i] == 1){
@@ -395,9 +400,11 @@ void Init(){//初始化
     I[22].head = 7;
     strcpy(I[22].body , str22);
     I[22].len = strlen(str22);
-
+    I[23].head = 2;
+    strcpy(I[23].body , str23);
+    I[23].len = strlen(str23);
     for(int i=0;i<200;i++){
-            for(int j=0;j<23;j++){
+            for(int j=0;j<24;j++){
                 Status[i].validItem[j] = 0;
                 for(int k=0;k<10;k++){
                 Status[i].SetItem[j][k] = 0;
@@ -469,7 +476,7 @@ int CalFollow(){
 
 
 void GetFirst(){
-    for(int i=0;i<23;i++){
+    for(int i=0;i<24;i++){
             char c = I[i].body[0];
             int number = Sym2Int(c);
             if(number>8){
@@ -481,7 +488,7 @@ void GetFirst(){
 
     do{
         oldnum = truenum;
-        for(int i=0;i<23;i++){
+        for(int i=0;i<24;i++){
             for(int j=0;j<I[i].len;j++){
                 char c= I[i].body[j];
                 int number = Sym2Int(c);
@@ -510,7 +517,7 @@ void GetFirst(){
 }
 
 void GetFollow(){
-    for(int i=0;i<23;i++){
+    for(int i=0;i<24;i++){
             for(int j=0;j<I[i].len-1;j++){
                 char c1 = I[i].body[j];
                 char c2 = I[i].body[j+1];
@@ -528,7 +535,7 @@ void GetFollow(){
 
     do{
         oldnum = truenum;
-        for(int i=0;i<23;i++){
+        for(int i=0;i<24;i++){
             for(int j=0;j<I[i].len-1;j++){
                 char c1 = I[i].body[j];
                 char c2 = I[i].body[j+1];
@@ -586,7 +593,7 @@ int main()
             struct ISet TempSet;
             SetCopy(&TempSet,&Status[sta_num]);
             //去除移动到末尾的式子并标记规约
-            for(int j=0;j<23;j++){
+            for(int j=0;j<24;j++){
                 if(TempSet.SetItem[j][I[j].len] == 1){
                     TempSet.SetItem[j][I[j].len]=0;
                     if(ItemValid(&TempSet,j)==0){
@@ -595,7 +602,7 @@ int main()
                 }
             }
             char c = Int2Sym(i);
-            for(int j=0;j<23;j++){//该符号读入后的情况
+            for(int j=0;j<24;j++){//该符号读入后的情况
                 for(int ind=0;ind<10;ind++)
                 {
                 if(Status[sta_num].SetItem[j][ind] == 1){
@@ -651,8 +658,8 @@ int main()
     for(int i=0;i<status_num;i++){
         int has_reduce = 0;
         int reduce_num;
-        int has_move;//exist Item that has not moved to its' end
-        for(int j=0;j<23;j++){
+        int has_move = 0;//exist Item that has not moved to its' end
+        for(int j=0;j<24;j++){
 
             int length = I[j].len;
             //printf("| i:%d j:%d |",i,j);
@@ -665,14 +672,22 @@ int main()
             }
         //printf("/ i:%d j:%d /",i,j);
         }
+        if(has_reduce == 1){
+                for(int j=0;j<27;j++){
+                ACT[i][j].reduce = reduce_num;
+                ACT[i][j].reducelen = I[reduce_num].len;
+                }
+
+        }
 
         //printf("i:%d ",i);
         //printf("\n");
         //printf("aaaaa ");
-        for(int j=0;j<23;j++){
+        for(int j=0;j<24;j++){
             for(int k=0;k<I[j].len;k++){
                 if(Status[i].SetItem[j][k] == 1){
                     has_move = 1;
+                    break;
                     //printf("i:%d j:%d k:%d ",i,j,k);
                 }
             }
@@ -681,14 +696,11 @@ int main()
         if((has_move == 1)&&(has_reduce == 1)){
             Status[i].conf = 1;
 
-                for(int j=0;j<27;j++){
-                    ACT[i][j].reduce = reduce_num;
-                    ACT[i][j].reducelen = I[reduce_num].len;
-            }
-
         }
+
         //printf("i:%d  ",i);
     }
+
     /*
 for(int i=0;i<23;i++){
     printf("validItem:%d\n",Status[0].validItem[i]);s
@@ -725,26 +737,44 @@ for(int i=0;i<=status_num;i++){
             }
         }else{
         int status = GetStackTop();
-        printf("%d %c goto:%d reduce:%d status:%d \n",status,c,GOTO[status][cnum],ACT[status][cnum].reduce,ACT[status][cnum].status_code);
+        printf("\n");
+        printf("status:%d datain:%c goto:%d reduce:%d status:%d conf:%d ptr:%d\n",status,c,GOTO[status][cnum],ACT[status][cnum].reduce,ACT[status][cnum].status_code,Status[status].conf,SStack.topptr);
+        printf("\n");
         if(Status[status].conf == 1){
             int Itemnum = ACT[status][cnum].reduce;
             int headnum = I[Itemnum].head;
             if(Follow[headnum][cnum-9] == 1){//in Follow Set
+                    printf("ptr before pop :%d\n",SStack.topptr);
                     PopStack(ACT[status][cnum].reducelen);
-                    PushStack(ACT[status][cnum].reduce);
-        }else{
-            if(ACT[status][cnum].status_code == 0){
+                    printf("ptr after pop :%d\n",SStack.topptr);
+                    printf("pop %d statuses\n",ACT[status][cnum].reducelen);
+                    int pre_status = GetStackTop();
+                    printf("jump to status %d with ptr = %d \n",pre_status,SStack.topptr);
+                    printf("get from reduce:%c \n",Int2Sym(I[ACT[status][cnum].reduce].head));
+                    printf("go to status %d \n",GOTO[pre_status][I[ACT[status][cnum].reduce].head]);
+                    PushStack(GOTO[pre_status][I[ACT[status][cnum].reduce].head]);
+                    printf("push %d status to stack\n",GOTO[pre_status][I[ACT[status][cnum].reduce].head]);
+        }else if(ACT[status][cnum].status_code == 0){
                 printf("error");
                 break;
-            }
+            }else{
             int nextstatus = GOTO[status][cnum];
             PushStack(nextstatus);
+            printf("push %d status to stack\n",nextstatus);
             parse_pos++;
-        }
+            }
         }else{
                 if(ACT[status][cnum].reduce != -1){
+                    printf("ptr before pop :%d\n",SStack.topptr);
                     PopStack(ACT[status][cnum].reducelen);
-                    PushStack(ACT[status][cnum].reduce);
+                    printf("ptr after pop :%d\n",SStack.topptr);
+                    printf("pop %d statuses\n",ACT[status][cnum].reducelen);
+                    int pre_status = GetStackTop();
+                    printf("jump to status %d \n",pre_status);
+                    printf("get from reduce:%c \n",Int2Sym(I[ACT[status][cnum].reduce].head));
+                    printf("go to status %d \n",GOTO[pre_status][I[ACT[status][cnum].reduce].head]);
+                    PushStack(GOTO[pre_status][I[ACT[status][cnum].reduce].head]);
+                    printf("push %d status to stack\n",GOTO[pre_status][I[ACT[status][cnum].reduce].head]);
                     continue;
                 }
                 if(ACT[status][cnum].status_code == 0){
@@ -753,6 +783,7 @@ for(int i=0;i<=status_num;i++){
             }
             int nextstatus = GOTO[status][cnum];
             PushStack(nextstatus);
+            printf("push %d status to stack\n",nextstatus);
             parse_pos++;
         }
     }
