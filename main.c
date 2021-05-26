@@ -17,7 +17,7 @@ int parse_pos=0;//the position of the current symbol under parse
     char str7[10] = "e(C)S";
     char str8[10] = "e(C)SfS";
     char str9[10] = "g(C)S";
-    char str10[10] = "S;S";
+    char str10[10] = "SS";
     char str11[10] = "E>E";
     char str12[10] = "E<E";
     char str13[10] = "EhE";
@@ -100,8 +100,8 @@ char GetNextSym(){//get next symbol to be parsed
     return c;
 }
 
-int GOTO[200][27];//GOTO表，描述状态转移
-struct Action ACT[200][27];
+int GOTO[200][28];//GOTO表，描述状态转移
+struct Action ACT[200][28];
 
 char Int2Sym(int a){
 switch (a){
@@ -167,6 +167,7 @@ switch (a){
     case 'e': return 24;//e = if
     case 'f': return 25;//f = else
     case 'g': return 26;//g = while
+    case '$': return 27;
 }
 }
 void Convert(char a){
@@ -319,7 +320,7 @@ void Init(){//初始化
 
 // init Action table
     for(int i=0;i<200;i++){
-        for(int j=0;j<27;j++){
+        for(int j=0;j<28;j++){
             ACT[i][j].status_code = 0;
             ACT[i][j].movein = 0;
             ACT[i][j].movenum = 0;
@@ -589,7 +590,7 @@ int main()
     do{
     status_num_old = status_num;
     for(int sta_num = 0;sta_num <= status_num;sta_num++){//遍历所有状态
-        for(int i=0;i<27;i++){//遍历每个符号
+        for(int i=0;i<28;i++){//遍历每个符号
             struct ISet TempSet;
             SetCopy(&TempSet,&Status[sta_num]);
             //去除移动到末尾的式子并标记规约
@@ -655,7 +656,7 @@ int main()
 
 
     //get the info of ISETS
-    for(int i=0;i<status_num;i++){
+    for(int i=0;i<=status_num;i++){
         int has_reduce = 0;
         int reduce_num;
         int has_move = 0;//exist Item that has not moved to its' end
@@ -673,7 +674,7 @@ int main()
         //printf("/ i:%d j:%d /",i,j);
         }
         if(has_reduce == 1){
-                for(int j=0;j<27;j++){
+                for(int j=0;j<28;j++){
                 ACT[i][j].reduce = reduce_num;
                 ACT[i][j].reducelen = I[reduce_num].len;
                 }
@@ -708,16 +709,16 @@ for(int i=0;i<23;i++){
 }
 */
     //PrintI(&Status[0]);
-
+/*
 for(int i=0;i<=status_num;i++){
     printf("第%d组\n",i);
     PrintI(&Status[i]);
     printf("\n");
 }
-/*
+
 for(int i=0;i<=status_num;i++){
-	for(int j=0;j<27;j++){
-		printf("%2d ",GOTO[i][j] );
+	for(int j=0;j<28;j++){
+		printf("%2d ",ACT[i][j].reduce );
 	}
 	printf("\n");
 }
@@ -731,50 +732,55 @@ for(int i=0;i<=status_num;i++){
                 printf("accept");
                 break;
             }
+            /*
             else{
                 printf("error");
                 break;
             }
-        }else{
+            */
+        }
+
         int status = GetStackTop();
-        printf("\n");
-        printf("status:%d datain:%c goto:%d reduce:%d status:%d conf:%d ptr:%d\n",status,c,GOTO[status][cnum],ACT[status][cnum].reduce,ACT[status][cnum].status_code,Status[status].conf,SStack.topptr);
-        printf("\n");
+        //printf("\n");
+        //printf("status:%d datain:%c goto:%d reduce:%d status:%d conf:%d ptr:%d\n",status,c,GOTO[status][cnum],ACT[status][cnum].reduce,ACT[status][cnum].status_code,Status[status].conf,SStack.topptr);
+        //printf("\n");
         if(Status[status].conf == 1){
             int Itemnum = ACT[status][cnum].reduce;
             int headnum = I[Itemnum].head;
-            if(Follow[headnum][cnum-9] == 1){//in Follow Set
-                    printf("ptr before pop :%d\n",SStack.topptr);
+            if((Follow[headnum][cnum-9] == 1)&&(cnum != 25)){//in Follow Set  对'else'特殊规定
+                    //printf("ptr before pop :%d\n",SStack.topptr);
                     PopStack(ACT[status][cnum].reducelen);
-                    printf("ptr after pop :%d\n",SStack.topptr);
-                    printf("pop %d statuses\n",ACT[status][cnum].reducelen);
+                    //printf("ptr after pop :%d\n",SStack.topptr);
+                    //printf("pop %d statuses\n",ACT[status][cnum].reducelen);
                     int pre_status = GetStackTop();
-                    printf("jump to status %d with ptr = %d \n",pre_status,SStack.topptr);
-                    printf("get from reduce:%c \n",Int2Sym(I[ACT[status][cnum].reduce].head));
-                    printf("go to status %d \n",GOTO[pre_status][I[ACT[status][cnum].reduce].head]);
+                    //printf("jump to status %d with ptr = %d \n",pre_status,SStack.topptr);
+                    //printf("get from reduce:%c \n",Int2Sym(I[ACT[status][cnum].reduce].head));
+                    //printf("go to status %d \n",GOTO[pre_status][I[ACT[status][cnum].reduce].head]);
                     PushStack(GOTO[pre_status][I[ACT[status][cnum].reduce].head]);
-                    printf("push %d status to stack\n",GOTO[pre_status][I[ACT[status][cnum].reduce].head]);
+                    //printf("push %d status to stack\n",GOTO[pre_status][I[ACT[status][cnum].reduce].head]);
         }else if(ACT[status][cnum].status_code == 0){
                 printf("error");
                 break;
             }else{
             int nextstatus = GOTO[status][cnum];
             PushStack(nextstatus);
-            printf("push %d status to stack\n",nextstatus);
+            //printf("push %d status to stack\n",nextstatus);
             parse_pos++;
             }
         }else{
+                //printf("111status:%d cnum:%d reduce:%d \n",status,cnum,ACT[status][cnum].reduce);
                 if(ACT[status][cnum].reduce != -1){
-                    printf("ptr before pop :%d\n",SStack.topptr);
+                    //printf("ptr before pop :%d\n",SStack.topptr);
                     PopStack(ACT[status][cnum].reducelen);
-                    printf("ptr after pop :%d\n",SStack.topptr);
-                    printf("pop %d statuses\n",ACT[status][cnum].reducelen);
+                    //printf("ptr after pop :%d\n",SStack.topptr);
+                    //printf("pop %d statuses\n",ACT[status][cnum].reducelen);
                     int pre_status = GetStackTop();
-                    printf("jump to status %d \n",pre_status);
-                    printf("get from reduce:%c \n",Int2Sym(I[ACT[status][cnum].reduce].head));
-                    printf("go to status %d \n",GOTO[pre_status][I[ACT[status][cnum].reduce].head]);
+                    //printf("jump to status %d \n",pre_status);
+                    //printf("status:%d cnum:%d reduce:%d head:%d\n",status,cnum,ACT[status][cnum].reduce,I[ACT[status][cnum].reduce].head);
+                    //printf("get from reduce:%c \n",Int2Sym(I[ACT[status][cnum].reduce].head));
+                    //printf("go to status %d \n",GOTO[pre_status][I[ACT[status][cnum].reduce].head]);
                     PushStack(GOTO[pre_status][I[ACT[status][cnum].reduce].head]);
-                    printf("push %d status to stack\n",GOTO[pre_status][I[ACT[status][cnum].reduce].head]);
+                    //printf("push %d status to stack\n",GOTO[pre_status][I[ACT[status][cnum].reduce].head]);
                     continue;
                 }
                 if(ACT[status][cnum].status_code == 0){
@@ -783,10 +789,10 @@ for(int i=0;i<=status_num;i++){
             }
             int nextstatus = GOTO[status][cnum];
             PushStack(nextstatus);
-            printf("push %d status to stack\n",nextstatus);
+            //printf("push %d status to stack\n",nextstatus);
             parse_pos++;
         }
-    }
+
     }
     return 0;
 }
