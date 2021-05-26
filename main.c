@@ -2,6 +2,10 @@
 #include <stdlib.h>
 #include <string.h>
 
+//symbols loaded
+char Datain[100] = "ba;ba;ba;a=d;a=d;e(a>a)a=a+a;fa=a-a;$";
+int parse_pos=0;//the position of the current symbol under parse
+
 //项的右部
     char str[10] = "P";
     char str1[10] = "DS";
@@ -42,6 +46,7 @@ struct ISet{//一个状态的项集
     int SetItem[23][10];
     int validItem[23];
     int conf;//存在冲突
+    int reducehead;//if exist item which can be reduced,record its head num
 };
 
 void InitISet(struct ISet *in){
@@ -61,7 +66,7 @@ struct Action{
     int status_code;//0 for error 1 for normal 2 for acc
     int movein;//为1表示移入
     int movenum;//表示移入的状态
-    int reduce;//为1表示规约
+    int reduce;//为-1表示不规约
     int reducelen;//回退长度
 };
 
@@ -71,6 +76,24 @@ struct StatusStack{
 };
 
 struct StatusStack SStack;
+int GetStackTop(){
+    return SStack.StatStack[SStack.topptr];
+}
+
+int PopStack(int n){
+    SStack.topptr = SStack.topptr-n;
+}
+
+void PushStack(int n){
+    SStack.StatStack[SStack.topptr] = n;
+    SStack.topptr = SStack.topptr++;
+}
+
+char GetNextSym(){//get next symbol to be parsed
+    char c = Datain[parse_pos];
+    parse_pos++;
+    return c;
+}
 
 int GOTO[200][27];//GOTO表，描述状态转移
 struct Action ACT[200][27];
@@ -287,9 +310,18 @@ void Init(){//初始化
 
     memset(SStack.StatStack,0,sizeof(SStack.StatStack));
     SStack.topptr = 0;
+    PushStack(0);
 
 // init Action table
-    ACT
+    for(int i=0;i<200;i++){
+        for(int j=0;j<27;j++){
+            ACT[i][j].status_code = 0;
+            ACT[i][j].movein = 0;
+            ACT[i][j].movenum = 0;
+            ACT[i][j].reduce = -1;
+            ACT[i][j].reducelen = 0;
+        }
+    }
 
     First[2][19] = 1;
     Follow[0][18] = 1;
@@ -374,30 +406,13 @@ void Init(){//初始化
     }
 
     //初始化ACTION表
-   for(int i=0;i<200;i++){
-    for(int j=0;j<27;j++){
-        strcpy(ACT[i][j].msg,"error"); //默认为错误
-        ACT[i][j].movein = 0;
-        ACT[i][j].movenum = 0;
-        ACT[i][j].reduce = 0;
-        ACT[i][j].reducelen = 0;
-    }
-   }
+
    for(int i=0;i<200;i++){
     InitISet(&Status[i]);
    }
 
    Status[0].validItem[0] = 1;
    Status[0].SetItem[0][0] = 1;
-   //Status[0].validItem[1] = 1;
-   //Status[0].validItem[2] = 1;
-   //Status[0].validItem[4] = 1;
-   //Status[0].validItem[5] = 1;
-   //Status[0].validItem[6] = 1;
-   //Status[0].validItem[7] = 1;
-   //Status[0].validItem[8] = 1;
-   //Status[0].validItem[9] = 1;
-   //Status[0].validItem[10]= 1;
 }
 
 void MergeFirst(int i,int j){//merge j to i
@@ -503,7 +518,7 @@ void GetFollow(){
                 int number2 = Sym2Int(c2);
                 if((number1 < 9) && (number2 > 8)){
                     Follow[number1][number2-9] = 1;
-                    printf("add %c to %c\n",Int2Sym(number2),Int2Sym(number1));
+                    //printf("add %c to %c\n",Int2Sym(number2),Int2Sym(number1));
             }
 
             }
@@ -556,46 +571,11 @@ int main()
     Init();
     GetFirst();
     GetFollow();
-/*
-    for(int i=0;i<9;i++){
-        printf("第%d的First集：\n",i);
-        for(int j=0;j<20;j++){
-            printf("%d ",First[i][j]);
-        }
-        printf("\n");
-    }
-*/
-/*
-    for(int i=0;i<9;i++){
-        printf("%c的Follow集：\n",Int2Sym(i));
-        for(int j=0;j<20;j++){
-                if(Follow[i][j] ==1){
-                   printf("%c ",Int2Sym(j+9));
-                }
-        }
-        printf("\n");
-    }
-*/
-/*
-    for(int i=0;i<23;i++){
-    printf("len:%d\n",I[i].len);
-    printf("head:%d\n",I[i].head);
-    printf("body:%s\n",I[i].body);
-}
-*/
+
 //初始化
     CLOSURE(&Status[0]);
-    /*
-    for(int i=0;i<23;i++){
-        printf("%d:validItem  ",i);
-        printf("%d\n",Status[0].validItem[i]);
-        for(int j=0;j<10;j++){
-            printf("%d ",Status[0].SetItem[i][j]);
-        }
-        printf("\n");
-    }
-    */
-    PrintI(&Status[0]);
+
+    //PrintI(&Status[0]);
 
     int status_num_old;
 
@@ -649,6 +629,7 @@ int main()
                     if(SetValid(&TempSet) == 1){
                     status_num++;
                     GOTO[sta_num][i] = status_num;
+                    ACT[sta_num][i].status_code = 1;
                     SetCopy(&Status[status_num],&TempSet);
                     //printf("from status %d\n",sta_num);
                     //printf("%d\n",status_num);
@@ -659,11 +640,55 @@ int main()
             }
             else{
             	GOTO[sta_num][i] = matchSet;
+            	ACT[sta_num][i].status_code = 1;
             }
         }
     }
     }while(status_num != status_num_old);
 
+
+    //get the info of ISETS
+    for(int i=0;i<status_num;i++){
+        int has_reduce = 0;
+        int reduce_num;
+        int has_move;//exist Item that has not moved to its' end
+        for(int j=0;j<23;j++){
+
+            int length = I[j].len;
+            //printf("| i:%d j:%d |",i,j);
+            //printf("%d ",length);
+                    //printf("%d:%d ",j,length);
+            if(Status[i].SetItem[j][length]==1){
+                has_reduce = 1;
+                reduce_num = j;
+                break;
+            }
+        //printf("/ i:%d j:%d /",i,j);
+        }
+
+        //printf("i:%d ",i);
+        //printf("\n");
+        //printf("aaaaa ");
+        for(int j=0;j<23;j++){
+            for(int k=0;k<I[j].len;k++){
+                if(Status[i].SetItem[j][k] == 1){
+                    has_move = 1;
+                    //printf("i:%d j:%d k:%d ",i,j,k);
+                }
+            }
+        }
+
+        if((has_move == 1)&&(has_reduce == 1)){
+            Status[i].conf = 1;
+
+                for(int j=0;j<27;j++){
+                    ACT[i][j].reduce = reduce_num;
+                    ACT[i][j].reducelen = I[reduce_num].len;
+            }
+
+        }
+        //printf("i:%d  ",i);
+    }
     /*
 for(int i=0;i<23;i++){
     printf("validItem:%d\n",Status[0].validItem[i]);s
@@ -677,14 +702,61 @@ for(int i=0;i<=status_num;i++){
     PrintI(&Status[i]);
     printf("\n");
 }
-
+/*
 for(int i=0;i<=status_num;i++){
 	for(int j=0;j<27;j++){
 		printf("%2d ",GOTO[i][j] );
 	}
 	printf("\n");
 }
-
+*/
+//lr(1) parse
+    while(1){
+        char c = Datain[parse_pos];
+        int cnum = Sym2Int(c);
+        if(c == '$'){
+            if(GetStackTop() == 1){
+                printf("accept");
+                break;
+            }
+            else{
+                printf("error");
+                break;
+            }
+        }else{
+        int status = GetStackTop();
+        printf("%d %c goto:%d reduce:%d status:%d \n",status,c,GOTO[status][cnum],ACT[status][cnum].reduce,ACT[status][cnum].status_code);
+        if(Status[status].conf == 1){
+            int Itemnum = ACT[status][cnum].reduce;
+            int headnum = I[Itemnum].head;
+            if(Follow[headnum][cnum-9] == 1){//in Follow Set
+                    PopStack(ACT[status][cnum].reducelen);
+                    PushStack(ACT[status][cnum].reduce);
+        }else{
+            if(ACT[status][cnum].status_code == 0){
+                printf("error");
+                break;
+            }
+            int nextstatus = GOTO[status][cnum];
+            PushStack(nextstatus);
+            parse_pos++;
+        }
+        }else{
+                if(ACT[status][cnum].reduce != -1){
+                    PopStack(ACT[status][cnum].reducelen);
+                    PushStack(ACT[status][cnum].reduce);
+                    continue;
+                }
+                if(ACT[status][cnum].status_code == 0){
+                printf("error");
+                break;
+            }
+            int nextstatus = GOTO[status][cnum];
+            PushStack(nextstatus);
+            parse_pos++;
+        }
+    }
+    }
     return 0;
 }
 
