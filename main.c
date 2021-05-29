@@ -2,9 +2,978 @@
 #include <stdlib.h>
 #include <string.h>
 
+char Int2Sym(int a){
+switch (a){
+    case 0: return 'p'; //p = P'
+    case 1: return 'P';
+    case 2: return 'D';
+    case 3: return 'S';
+    case 4: return 'L';
+    case 5: return 'C';
+    case 6: return 'E';
+    case 7: return 'F';
+    case 8: return 'T';
+    case 9: return 'a';//a = id
+    case 10: return ';';
+    case 11: return 'b';//b = int
+    case 12: return 'c';//c = float
+    case 13: return '=';
+    case 14: return '(';
+    case 15: return ')';
+    case 16: return '>';
+    case 17: return '<';
+    case 18: return 'h';//h = '=='
+    case 19: return '+';
+    case 20: return '-';
+    case 21: return '*';
+    case 22: return '/';
+    case 23: return 'd';//d = digits
+    case 24: return 'e';//e = if
+    case 25: return 'f';//f = else
+    case 26: return 'g';//g = while
+    case 27: return '$';
+    case 28: return 'n';//n = null
+}
+return ' ';
+}
+
+int Sym2Int(char a){
+switch (a){
+    case 'p': return 0; //p = P'
+    case 'P': return 1;
+    case 'D': return 2;
+    case 'S': return 3;
+    case 'L': return 4;
+    case 'C': return 5;
+    case 'E': return 6;
+    case 'F': return 7;
+    case 'T': return 8;
+    case 'a': return 9;//a = id
+    case ';': return 10;
+    case 'b': return 11;//b = int
+    case 'c': return 12;//c = float
+    case '=': return 13;
+    case '(': return 14;
+    case ')': return 15;
+    case '>': return 16;
+    case '<': return 17;
+    case 'h': return 18;//h = '=='
+    case '+': return 19;
+    case '-': return 20;
+    case '*': return 21;
+    case '/': return 22;
+    case 'd': return 23;//d = digits
+    case 'e': return 24;//e = if
+    case 'f': return 25;//f = else
+    case 'g': return 26;//g = while
+    case '$': return 27;
+}
+}
+
 //symbols loaded
-char Datain[100] = "ba;ba;ba;a=d;a=d;e(a>a)a=a+a;fa=a-a;$";
+char Datain[100] = "ba;ba;ba;a=d;a=d;a=d;e(a>a)a=a+a+d;fa=a-a;$";
+int Value_table[100]={0};
+char Name_table[100][10];
 int parse_pos=0;//the position of the current symbol under parse
+
+void Init_Load_data(){
+    Value_table[11]=1;
+    Value_table[15]=2;
+    Value_table[19]=1;
+    Value_table[33]=3;
+
+    strcpy(Name_table[1],"a");
+    strcpy(Name_table[4],"b");
+    strcpy(Name_table[7],"c");
+    strcpy(Name_table[9],"a");
+    strcpy(Name_table[13],"b");
+    strcpy(Name_table[17],"c");
+    strcpy(Name_table[23],"a");
+    strcpy(Name_table[25],"b");
+    strcpy(Name_table[27],"a");
+    strcpy(Name_table[29],"a");
+    strcpy(Name_table[31],"b");
+    strcpy(Name_table[36],"a");
+    strcpy(Name_table[38],"a");
+    strcpy(Name_table[40],"c");
+}
+
+char inter_code[100][20];//生成的三地址代码
+int current_line=0;
+
+void Add_inter_code(char *in){
+    strcpy(inter_code[current_line],in);
+    current_line++;
+}
+void Remove_inter_code(int n){
+    current_line=current_line-n;
+    //printf("remove %d lines\n",n);
+}
+
+int tempVariable[1000];//temp variable used to hold the
+int used_temp_num=0;//the number of temp_variables
+
+struct Sym_attr{
+    int  sym_num;//symbol number
+    int  sym_type;
+    char name[10];
+    char code[10][100];//code
+    char final_code[100];
+    int  codenum;//the number of lines
+    int  value;
+    int  value_pos;//point out the position of temp variable which hold the value of the expression
+    int  is_digit;//for F
+};
+struct Sym_attr SymStack[100];//symbol stack
+int sym_ptr = 0;
+
+void Push_Sym_Stack(struct Sym_attr *in){
+    //printf("sym_ptr before push %d\n",sym_ptr);
+    printf("push %c\n",Int2Sym(in->sym_num));
+    SymStack[sym_ptr].sym_num = in->sym_num;
+    SymStack[sym_ptr].sym_type = in->sym_type;
+    SymStack[sym_ptr].value = in->value;
+    SymStack[sym_ptr].is_digit = in->is_digit;
+    for(int i=0;i<in->codenum;i++){
+        strcpy(SymStack[sym_ptr].code[i],in->code[i]);
+    }
+    strcpy(SymStack[sym_ptr].final_code,in->final_code);
+    strcpy(SymStack[sym_ptr].name,in->name);
+    SymStack[sym_ptr].codenum = in->codenum;
+    SymStack[sym_ptr].value_pos= in->value_pos;
+    sym_ptr++;
+    //printf("sym_ptr after push %d\n",sym_ptr);
+}
+
+void Pop_Sym_Stack(int num){
+    //printf("sym_ptr before pop %d\n",sym_ptr);
+    sym_ptr = sym_ptr-num;
+    //printf("pop %d syms\n",num);
+    //printf("sym_ptr before pop %d\n",sym_ptr);
+}
+
+struct Symbol{
+    int sym_type;
+    char name[10];
+    int value;
+    int has_init;//has been initialized
+};
+
+struct Symbol Symtable[100];//symbol table
+int sym_number = 0;
+
+void CreateSym(struct Symbol *in,int type,char* name,int value,int has_init){
+    in->sym_type = type;
+    in->value = value;
+    strcpy(in->name,name);
+    in->has_init = has_init;
+}
+
+int ChangeSym(char *name,int value){
+    for(int i=0;i<=sym_number;i++){
+       if( strcmp(name,Symtable[i].name) == 0 ){
+        Symtable[i].value = value;
+        Symtable[i].has_init = 1;
+        return 0;
+       }
+    }
+    return 1;
+
+}
+
+int AddSym(struct Symbol in){
+    for(int i=0;i<=sym_number;i++){
+       if( strcmp(in.name,Symtable[i].name) == 0 ){
+            return 1;//error
+       }
+    }
+    Symtable[sym_number].sym_type = in.sym_type;
+    strcpy(Symtable[sym_number].name,in.name);
+    Symtable[sym_number].value = in.value;
+    Symtable[sym_number].has_init = in.has_init;
+    sym_number++;
+    return 0;
+}
+
+void Reduce_Symbol(int num){//reduce symbol with item num
+    printf("Reduce Sym %d\n",num);
+    struct Symbol temp;//Symbol be initialized
+    int err;
+    int L1;
+    struct Sym_attr D;
+    D.codenum = 0;
+    D.sym_num = 2;
+    struct Sym_attr S;
+    S.codenum = 0;
+    S.sym_num = 3;
+    struct Sym_attr E;
+    E.codenum = 0;
+    E.sym_num = 6;
+    struct Sym_attr T;
+    T.codenum = 0;
+    T.sym_num = 8;
+    struct Sym_attr F;
+    F.codenum = 0;
+    F.sym_num = 7;
+    struct Sym_attr L;
+    L.codenum = 0;
+    L.sym_num = 4;
+    struct Sym_attr C;
+    C.codenum = 0;
+    C.sym_num = 5;
+    struct Sym_attr P;
+    P.codenum = 0;
+    P.sym_num = 1;
+    char inter_code1[20];
+    char inter_code2[20];
+    char inter_code3[20];
+
+    char code[100];
+    char final_code[100];
+    char Dcode[100];//just a temp string
+    switch(num){
+    case 23:
+        printf("init %s\n",SymStack[sym_ptr-2].name);
+        temp.has_init = 0;
+        strcpy(temp.name,SymStack[sym_ptr-2].name);
+        temp.sym_type = SymStack[sym_ptr-3].sym_type;
+        int err = AddSym(temp);
+        if(err == 1){
+            printf("error:repeated definition\n");
+        }
+
+        switch(SymStack[sym_ptr-3].sym_type){
+            case 11:
+                strcpy(code,"int");
+                break;
+            case 12:
+                strcpy(code,"float");
+                break;
+        }
+
+        sprintf(Dcode,"%s %s;",code,SymStack[sym_ptr-2].name);
+        strcpy(D.code[0],Dcode);
+        Pop_Sym_Stack(3);
+        Push_Sym_Stack(&D);
+        break;
+    case 2:
+        printf("init %s\n",SymStack[sym_ptr-2].name);
+        temp.has_init = 0;
+        strcpy(temp.name,SymStack[sym_ptr-3].name);
+        temp.sym_type = SymStack[sym_ptr-4].sym_type;
+        err = AddSym(temp);
+        if(err == 1){
+            printf("error:repeated definition\n");
+        }
+
+        switch(SymStack[sym_ptr-4].sym_type){
+            case 11:
+                strcpy(code,"int");
+                break;
+            case 12:
+                strcpy(code,"float");
+                break;
+        }
+        sprintf(Dcode,"%s %s;",code,SymStack[sym_ptr-3].name);
+        strcpy(D.code[0],Dcode);
+        Pop_Sym_Stack(4);
+        Push_Sym_Stack(&D);
+        break;
+
+        case 1:
+        Pop_Sym_Stack(2);
+        P.sym_num = 1;
+        Push_Sym_Stack(&P);
+        break;
+
+        case 3:
+        Pop_Sym_Stack(1);
+        P.sym_num = 1;
+        Push_Sym_Stack(&P);
+        break;
+        case 4:
+        L.sym_type =SymStack[sym_ptr-1].sym_num;
+        L.sym_num =4;
+        Pop_Sym_Stack(1);
+        Push_Sym_Stack(&L);
+        break;
+
+        case 5:
+        L.sym_type =SymStack[sym_ptr-1].sym_num;
+        L.sym_num =4;
+        Pop_Sym_Stack(1);
+        Push_Sym_Stack(&L);
+        break;
+
+        case 6:
+        S.sym_num = 3;
+        for(int i=0;i<SymStack[sym_ptr-2].codenum;i++){
+            strcpy(S.code[S.codenum],SymStack[sym_ptr-2].code[i]);
+            S.codenum++;
+        }
+        if(SymStack[sym_ptr-2].sym_type==23){
+            sprintf(Dcode,"%s=%d;",SymStack[sym_ptr-4].name,SymStack[sym_ptr-2].value);
+        }
+        else if(SymStack[sym_ptr-2].sym_type==9){
+            sprintf(Dcode,"%s=%s;",SymStack[sym_ptr-4].name,SymStack[sym_ptr-2].name);
+        }
+        else{
+            sprintf(Dcode,"%s=reg%d;",SymStack[sym_ptr-4].name,SymStack[sym_ptr-2].value_pos);
+        }
+
+        strcpy(S.code[S.codenum],Dcode);
+        S.codenum++;
+        printf("\n");
+        printf("= get %d codes from S\n",SymStack[sym_ptr-2].codenum);
+        printf("POP SYM %c\n",Int2Sym(SymStack[sym_ptr-2].sym_num));
+        printf("\n");
+        //S.value_pos =
+
+        Add_inter_code(Dcode);
+        ChangeSym(SymStack[sym_ptr-4].name,SymStack[sym_ptr-2].value_pos);
+        Pop_Sym_Stack(4);
+        Push_Sym_Stack(&S);
+
+        break;
+
+        case 7:
+        S.codenum = SymStack[sym_ptr-3].codenum;
+        for(int i=0;i<SymStack[sym_ptr-3].codenum;i++){
+            strcpy(S.code[i],SymStack[sym_ptr-3].code[i]);
+        }
+        Remove_inter_code(SymStack[sym_ptr-1].codenum);
+        sprintf(Dcode,"if %s goto %d;",SymStack[sym_ptr-3].final_code,current_line+2);
+        Add_inter_code(Dcode);
+        strcpy(S.code[S.codenum],Dcode);
+        S.codenum++;
+        S.sym_num = 3;
+        sprintf(Dcode,"goto %d;",current_line+SymStack[sym_ptr-1].codenum+1);
+        Add_inter_code(Dcode);
+        strcpy(S.code[S.codenum],Dcode);
+        S.codenum++;
+        for(int i=0;i<SymStack[sym_ptr-1].codenum;i++){
+            Add_inter_code(SymStack[sym_ptr-1].code[i]);
+            strcpy(S.code[S.codenum],SymStack[sym_ptr-1].code[i]);
+            S.codenum++;
+        }
+
+        //S.value_pos =
+        Pop_Sym_Stack(5);
+        Push_Sym_Stack(&S);
+        break;
+
+        case 8:
+
+        strcpy(S.code[0],Dcode);
+        S.codenum = SymStack[sym_ptr-5].codenum;
+        for(int i=0;i<SymStack[sym_ptr-5].codenum+1;i++){
+            strcpy(S.code[i],SymStack[sym_ptr-5].code[i]);
+        }
+        printf("\n");
+        printf("POP SYM %c\n",Int2Sym(SymStack[sym_ptr-1].sym_num));
+        printf("\n");
+
+        Remove_inter_code(SymStack[sym_ptr-1].codenum);
+
+        //printf("\n");
+        //printf("POP SYM %c\n",Int2Sym(SymStack[sym_ptr-3].sym_num));
+        //printf("\n");
+
+        Remove_inter_code(SymStack[sym_ptr-3].codenum);
+
+        //printf("\n");
+        //printf("POP SYM %c\n",Int2Sym(SymStack[sym_ptr-5].sym_num));
+        //printf("\n");
+
+        Remove_inter_code(SymStack[sym_ptr-5].codenum);
+
+        sprintf(Dcode,"if %s goto %d;",SymStack[sym_ptr-5].final_code,current_line+SymStack[sym_ptr-1].codenum+2);
+        Add_inter_code(Dcode);
+
+        strcpy(S.code[S.codenum],Dcode);
+        S.codenum++;
+        S.sym_num = 3;
+        for(int i=0;i<SymStack[sym_ptr-1].codenum;i++){
+            Add_inter_code(SymStack[sym_ptr-1].code[i]);
+            strcpy(S.code[S.codenum],SymStack[sym_ptr-1].code[i]);
+            S.codenum++;
+        }
+        sprintf(Dcode,"goto %d;",current_line+SymStack[sym_ptr-3].codenum+1);
+        Add_inter_code(Dcode);
+        strcpy(S.code[S.codenum],Dcode);
+        S.codenum++;
+        for(int i=0;i<SymStack[sym_ptr-3].codenum;i++){
+            Add_inter_code(SymStack[sym_ptr-3].code[i]);
+            strcpy(S.code[S.codenum],SymStack[sym_ptr-3].code[i]);
+            S.codenum++;
+        }
+
+        //S.value_pos =
+        Pop_Sym_Stack(7);
+        Push_Sym_Stack(&S);
+        break;
+
+    case 9:
+        S.codenum = SymStack[sym_ptr-3].codenum;
+        for(int i=0;i<SymStack[sym_ptr-3].codenum;i++){
+            strcpy(S.code[i],SymStack[sym_ptr-3].code[i]);
+        }
+        Remove_inter_code(SymStack[sym_ptr-1].codenum);
+        L1 = current_line;
+        sprintf(Dcode,"if %s goto %d;",SymStack[sym_ptr-3].final_code,current_line+2);
+        Add_inter_code(Dcode);
+        strcpy(S.code[S.codenum],Dcode);
+        S.codenum++;
+        S.sym_num = 3;
+        sprintf(Dcode,"goto %d;",current_line+SymStack[sym_ptr-1].codenum+2);
+        Add_inter_code(Dcode);
+        strcpy(S.code[S.codenum],Dcode);
+        S.codenum++;
+
+        for(int i=0;i<SymStack[sym_ptr-1].codenum;i++){
+            Add_inter_code(SymStack[sym_ptr-1].code[i]);
+            strcpy(S.code[S.codenum],SymStack[sym_ptr-1].code[i]);
+            S.codenum++;
+        }
+        sprintf(Dcode,"goto %d;",L1);
+        Add_inter_code(Dcode);
+        strcpy(S.code[S.codenum],Dcode);
+        S.codenum++;
+
+        //S.value_pos =
+        Pop_Sym_Stack(5);
+        Push_Sym_Stack(&S);
+        break;
+
+    case 10:
+        S.codenum = 0;
+
+        for(int i=0;i<SymStack[sym_ptr-3].codenum;i++){
+            //Add_inter_code(SymStack[sym_ptr-3].code[i]);
+            strcpy(S.code[S.codenum],SymStack[sym_ptr-3].code[i]);
+            S.codenum++;
+        }
+
+        for(int i=0;i<SymStack[sym_ptr-1].codenum;i++){
+            //Add_inter_code(SymStack[sym_ptr-1].code[i]);
+            strcpy(S.code[S.codenum],SymStack[sym_ptr-1].code[i]);
+            S.codenum++;
+        }
+        Pop_Sym_Stack(3);
+        Push_Sym_Stack(&S);
+        break;
+    case 11:
+        Remove_inter_code(SymStack[sym_ptr-1].codenum);
+        Remove_inter_code(SymStack[sym_ptr-3].codenum);
+        C.codenum=0;
+        for(int i=0;i<SymStack[sym_ptr-3].codenum;i++){
+            Add_inter_code(SymStack[sym_ptr-3].code[i]);
+            strcpy(C.code[C.codenum],SymStack[sym_ptr-3].code[i]);
+            C.codenum++;
+        }
+        for(int i=0;i<SymStack[sym_ptr-1].codenum;i++){
+            Add_inter_code(SymStack[sym_ptr-1].code[i]);
+            strcpy(C.code[C.codenum],SymStack[sym_ptr-1].code[i]);
+            C.codenum++;
+        }
+        if(SymStack[sym_ptr-3].sym_type == 9){
+                if(SymStack[sym_ptr-1].sym_type == 9){
+                    sprintf(Dcode,"%s>%s",SymStack[sym_ptr-3].name,SymStack[sym_ptr-1].name);
+                    strcpy(C.final_code,Dcode);
+                }
+                else if(SymStack[sym_ptr-1].sym_type == 23){
+                    sprintf(Dcode,"%s>%d",SymStack[sym_ptr-3].name,SymStack[sym_ptr-1].value);
+                    strcpy(C.final_code,Dcode);
+                }
+                else{
+                    sprintf(Dcode,"%s>reg%d",SymStack[sym_ptr-3].name,SymStack[sym_ptr-1].value_pos);
+                    strcpy(C.final_code,Dcode);
+                }
+        }
+        else if(SymStack[sym_ptr-3].sym_type == 23){
+                if(SymStack[sym_ptr-1].sym_type == 9){
+                    sprintf(Dcode,"%d>%s",SymStack[sym_ptr-3].value,SymStack[sym_ptr-1].name);
+                    strcpy(C.final_code,Dcode);
+                }
+                else if(SymStack[sym_ptr-1].sym_type == 23){
+                    sprintf(Dcode,"%d>%d",SymStack[sym_ptr-3].value,SymStack[sym_ptr-1].value);
+                    strcpy(C.final_code,Dcode);
+                }
+                else{
+                    sprintf(Dcode,"%d>reg%d",SymStack[sym_ptr-3].value,SymStack[sym_ptr-1].value_pos);
+                    strcpy(C.final_code,Dcode);
+                }
+        }
+        else{
+                if(SymStack[sym_ptr-1].sym_type == 9){
+                    sprintf(Dcode,"reg%d>%s",SymStack[sym_ptr-3].value_pos,SymStack[sym_ptr-1].name);
+                    strcpy(C.final_code,Dcode);
+                }
+                else if(SymStack[sym_ptr-1].sym_type == 23){
+                    sprintf(Dcode,"reg%d>%d",SymStack[sym_ptr-3].value_pos,SymStack[sym_ptr-1].value);
+                    strcpy(C.final_code,Dcode);
+                }
+                else{
+                    sprintf(Dcode,"reg%d>reg%d",SymStack[sym_ptr-3].value_pos,SymStack[sym_ptr-1].value_pos);
+                    strcpy(C.final_code,Dcode);
+                }
+        }
+
+        Pop_Sym_Stack(3);
+        Push_Sym_Stack(&C);
+        break;
+    case 12:
+        Remove_inter_code(SymStack[sym_ptr-1].codenum);
+        Remove_inter_code(SymStack[sym_ptr-3].codenum);
+        C.codenum=0;
+        for(int i=0;i<SymStack[sym_ptr-3].codenum;i++){
+            Add_inter_code(SymStack[sym_ptr-3].code[i]);
+            strcpy(C.code[C.codenum],SymStack[sym_ptr-3].code[i]);
+            C.codenum++;
+        }
+        for(int i=0;i<SymStack[sym_ptr-1].codenum;i++){
+            Add_inter_code(SymStack[sym_ptr-1].code[i]);
+            strcpy(C.code[C.codenum],SymStack[sym_ptr-1].code[i]);
+            C.codenum++;
+        }
+        if(SymStack[sym_ptr-3].sym_type == 9){
+                if(SymStack[sym_ptr-1].sym_type == 9){
+                    sprintf(Dcode,"%s<%s",SymStack[sym_ptr-3].name,SymStack[sym_ptr-1].name);
+                    strcpy(C.final_code,Dcode);
+                }
+                else if(SymStack[sym_ptr-1].sym_type == 23){
+                    sprintf(Dcode,"%s<%d",SymStack[sym_ptr-3].name,SymStack[sym_ptr-1].value);
+                    strcpy(C.final_code,Dcode);
+                }
+                else{
+                    sprintf(Dcode,"%s<reg%d",SymStack[sym_ptr-3].name,SymStack[sym_ptr-1].value_pos);
+                    strcpy(C.final_code,Dcode);
+                }
+        }
+        else if(SymStack[sym_ptr-3].sym_type == 23){
+                if(SymStack[sym_ptr-1].sym_type == 9){
+                    sprintf(Dcode,"%d<%s",SymStack[sym_ptr-3].value,SymStack[sym_ptr-1].name);
+                    strcpy(C.final_code,Dcode);
+                }
+                else if(SymStack[sym_ptr-1].sym_type == 23){
+                    sprintf(Dcode,"%d<%d",SymStack[sym_ptr-3].value,SymStack[sym_ptr-1].value);
+                    strcpy(C.final_code,Dcode);
+                }
+                else{
+                    sprintf(Dcode,"%d<reg%d",SymStack[sym_ptr-3].value,SymStack[sym_ptr-1].value_pos);
+                    strcpy(C.final_code,Dcode);
+                }
+        }
+        else{
+                if(SymStack[sym_ptr-1].sym_type == 9){
+                    sprintf(Dcode,"reg%d<%s",SymStack[sym_ptr-3].value_pos,SymStack[sym_ptr-1].name);
+                    strcpy(C.final_code,Dcode);
+                }
+                else if(SymStack[sym_ptr-1].sym_type == 23){
+                    sprintf(Dcode,"reg%d<%d",SymStack[sym_ptr-3].value_pos,SymStack[sym_ptr-1].value);
+                    strcpy(C.final_code,Dcode);
+                }
+                else{
+                    sprintf(Dcode,"reg%d<reg%d",SymStack[sym_ptr-3].value_pos,SymStack[sym_ptr-1].value_pos);
+                    strcpy(C.final_code,Dcode);
+                }
+        }
+        Pop_Sym_Stack(3);
+        Push_Sym_Stack(&C);
+        break;
+    case 13:
+        Remove_inter_code(SymStack[sym_ptr-1].codenum);
+        Remove_inter_code(SymStack[sym_ptr-3].codenum);
+        C.codenum=0;
+        for(int i=0;i<SymStack[sym_ptr-3].codenum;i++){
+            Add_inter_code(SymStack[sym_ptr-3].code[i]);
+            strcpy(C.code[C.codenum],SymStack[sym_ptr-3].code[i]);
+            C.codenum++;
+        }
+        for(int i=0;i<SymStack[sym_ptr-1].codenum;i++){
+            Add_inter_code(SymStack[sym_ptr-1].code[i]);
+            strcpy(C.code[C.codenum],SymStack[sym_ptr-1].code[i]);
+            C.codenum++;
+        }
+                if(SymStack[sym_ptr-3].sym_type == 9){
+                if(SymStack[sym_ptr-1].sym_type == 9){
+                    sprintf(Dcode,"%s==%s",SymStack[sym_ptr-3].name,SymStack[sym_ptr-1].name);
+                    strcpy(C.final_code,Dcode);
+                }
+                else if(SymStack[sym_ptr-1].sym_type == 23){
+                    sprintf(Dcode,"%s==%d",SymStack[sym_ptr-3].name,SymStack[sym_ptr-1].value);
+                    strcpy(C.final_code,Dcode);
+                }
+                else{
+                    sprintf(Dcode,"%s==reg%d",SymStack[sym_ptr-3].name,SymStack[sym_ptr-1].value_pos);
+                    strcpy(C.final_code,Dcode);
+                }
+        }
+        else if(SymStack[sym_ptr-3].sym_type == 23){
+                if(SymStack[sym_ptr-1].sym_type == 9){
+                    sprintf(Dcode,"%d==%s",SymStack[sym_ptr-3].value,SymStack[sym_ptr-1].name);
+                    strcpy(C.final_code,Dcode);
+                }
+                else if(SymStack[sym_ptr-1].sym_type == 23){
+                    sprintf(Dcode,"%d==%d",SymStack[sym_ptr-3].value,SymStack[sym_ptr-1].value);
+                    strcpy(C.final_code,Dcode);
+                }
+                else{
+                    sprintf(Dcode,"%d==reg%d",SymStack[sym_ptr-3].value,SymStack[sym_ptr-1].value_pos);
+                    strcpy(C.final_code,Dcode);
+                }
+        }
+        else{
+                if(SymStack[sym_ptr-1].sym_type == 9){
+                    sprintf(Dcode,"reg%d==%s",SymStack[sym_ptr-3].value_pos,SymStack[sym_ptr-1].name);
+                    strcpy(C.final_code,Dcode);
+                }
+                else if(SymStack[sym_ptr-1].sym_type == 23){
+                    sprintf(Dcode,"reg%d==%d",SymStack[sym_ptr-3].value_pos,SymStack[sym_ptr-1].value);
+                    strcpy(C.final_code,Dcode);
+                }
+                else{
+                    sprintf(Dcode,"reg%d==reg%d",SymStack[sym_ptr-3].value_pos,SymStack[sym_ptr-1].value_pos);
+                    strcpy(C.final_code,Dcode);
+                }
+        }
+        Pop_Sym_Stack(3);
+        Push_Sym_Stack(&C);
+        break;
+    case 14:
+        Remove_inter_code(SymStack[sym_ptr-1].codenum);
+        Remove_inter_code(SymStack[sym_ptr-3].codenum);
+        E.codenum=0;
+        printf("\n");
+        printf("add get %d codes from S2\n",SymStack[sym_ptr-3].codenum);
+        printf("POP SYM %c\n",Int2Sym(SymStack[sym_ptr-3].sym_num));
+        printf("\n");
+        for(int i=0;i<SymStack[sym_ptr-3].codenum;i++){
+            Add_inter_code(SymStack[sym_ptr-3].code[i]);
+            strcpy(E.code[E.codenum],SymStack[sym_ptr-3].code[i]);
+            E.codenum++;
+        }
+        printf("\n");
+        printf("add get %d codes from S1\n",SymStack[sym_ptr-1].codenum);
+        printf("POP SYM %c\n",Int2Sym(SymStack[sym_ptr-1].sym_num));
+        printf("\n");
+        for(int i=0;i<SymStack[sym_ptr-1].codenum;i++){
+            Add_inter_code(SymStack[sym_ptr-1].code[i]);
+            strcpy(E.code[E.codenum],SymStack[sym_ptr-1].code[i]);
+            E.codenum++;
+        }
+
+        if(SymStack[sym_ptr-1].sym_type == 23){
+                if(SymStack[sym_ptr-3].sym_type == 23){
+                    sprintf(Dcode,"reg%d=%d+%d",used_temp_num,SymStack[sym_ptr-3].value,SymStack[sym_ptr-1].value);
+                }
+                else if(SymStack[sym_ptr-3].sym_type == 9){
+                    sprintf(Dcode,"reg%d=%s+%d",used_temp_num,SymStack[sym_ptr-3].name,SymStack[sym_ptr-1].value);
+                }
+                else{
+                    sprintf(Dcode,"reg%d=reg%d+%d",used_temp_num,SymStack[sym_ptr-3].value_pos,SymStack[sym_ptr-1].value);
+                }
+
+        }
+        else if(SymStack[sym_ptr-1].sym_type == 9){
+                if(SymStack[sym_ptr-3].sym_type == 23){
+                    sprintf(Dcode,"reg%d=%d+%s",used_temp_num,SymStack[sym_ptr-3].value,SymStack[sym_ptr-1].name);
+                }
+                else if(SymStack[sym_ptr-3].sym_type == 9){
+                    sprintf(Dcode,"reg%d=%s+%s",used_temp_num,SymStack[sym_ptr-3].name,SymStack[sym_ptr-1].name);
+                }
+                else{
+                    sprintf(Dcode,"reg%d=reg%d+%s",used_temp_num,SymStack[sym_ptr-3].value_pos,SymStack[sym_ptr-1].name);
+                }
+        }
+        else{
+            if(SymStack[sym_ptr-3].sym_type == 23){
+                    sprintf(Dcode,"reg%d=%d+reg%d",used_temp_num,SymStack[sym_ptr-3].value,SymStack[sym_ptr-1].value_pos);
+
+                }
+                else if(SymStack[sym_ptr-3].sym_type == 9){
+                    sprintf(Dcode,"reg%d=%s+reg%d",used_temp_num,SymStack[sym_ptr-3].name,SymStack[sym_ptr-1].value_pos);
+                }
+                else{
+                    sprintf(Dcode,"reg%d=reg%d+reg%d",used_temp_num,SymStack[sym_ptr-3].value_pos,SymStack[sym_ptr-1].value_pos);
+                }
+        }
+        E.value_pos = used_temp_num;
+        used_temp_num++;
+
+        Add_inter_code(Dcode);
+        strcpy(E.code[E.codenum],Dcode);
+        E.codenum++;
+        E.sym_type = 6;
+        Pop_Sym_Stack(3);
+        Push_Sym_Stack(&E);
+        break;
+    case 15:
+    	Remove_inter_code(SymStack[sym_ptr-1].codenum);
+        Remove_inter_code(SymStack[sym_ptr-3].codenum);
+        E.codenum=0;
+        printf("\n");
+        printf("sub get %d codes from S2\n",SymStack[sym_ptr-3].codenum);
+        printf("POP SYM %c\n",Int2Sym(SymStack[sym_ptr-3].sym_num));
+        printf("\n");
+        for(int i=0;i<SymStack[sym_ptr-3].codenum;i++){
+            Add_inter_code(SymStack[sym_ptr-3].code[i]);
+            strcpy(E.code[E.codenum],SymStack[sym_ptr-3].code[i]);
+            E.codenum++;
+        }
+        printf("\n");
+        printf("sub get %d codes from S2\n",SymStack[sym_ptr-1].codenum);
+        printf("POP SYM %c\n",Int2Sym(SymStack[sym_ptr-1].sym_num));
+        printf("\n");
+        for(int i=0;i<SymStack[sym_ptr-1].codenum;i++){
+            Add_inter_code(SymStack[sym_ptr-1].code[i]);
+            strcpy(E.code[E.codenum],SymStack[sym_ptr-1].code[i]);
+            E.codenum++;
+        }
+        E.value_pos = used_temp_num;
+        used_temp_num++;
+        if(SymStack[sym_ptr-1].sym_type == 23){
+                if(SymStack[sym_ptr-3].sym_type == 23){
+                    sprintf(Dcode,"reg%d=%d-%d",used_temp_num,SymStack[sym_ptr-3].value,SymStack[sym_ptr-1].value);
+                }
+                else if(SymStack[sym_ptr-3].sym_type == 9){
+                    sprintf(Dcode,"reg%d=%s-%d",used_temp_num,SymStack[sym_ptr-3].name,SymStack[sym_ptr-1].value);
+                }
+                else{
+                    sprintf(Dcode,"reg%d=%d-%d",used_temp_num,SymStack[sym_ptr-3].value_pos,SymStack[sym_ptr-1].value);
+                }
+
+        }
+        else if(SymStack[sym_ptr-1].sym_type == 9){
+                if(SymStack[sym_ptr-3].sym_type == 23){
+                    sprintf(Dcode,"reg%d=%d-%s",used_temp_num,SymStack[sym_ptr-3].value,SymStack[sym_ptr-1].name);
+                }
+                else if(SymStack[sym_ptr-3].sym_type == 9){
+                    sprintf(Dcode,"reg%d=%s-%s",used_temp_num,SymStack[sym_ptr-3].name,SymStack[sym_ptr-1].name);
+                }
+                else{
+                    sprintf(Dcode,"reg%d=reg%d-%s",used_temp_num,SymStack[sym_ptr-3].value_pos,SymStack[sym_ptr-1].name);
+                }
+        }
+        else{
+            if(SymStack[sym_ptr-3].sym_type == 23){
+                    sprintf(Dcode,"reg%d=%d-reg%d",used_temp_num,SymStack[sym_ptr-3].value,SymStack[sym_ptr-1].value_pos);
+
+                }
+                else if(SymStack[sym_ptr-3].sym_type == 9){
+                    sprintf(Dcode,"reg%d=%s-reg%d",used_temp_num,SymStack[sym_ptr-3].name,SymStack[sym_ptr-1].value_pos);
+                }
+                else{
+                    sprintf(Dcode,"reg%d=reg%d-reg%d",used_temp_num,SymStack[sym_ptr-3].value_pos,SymStack[sym_ptr-1].value_pos);
+                }
+        }
+        E.value_pos = used_temp_num;
+        used_temp_num++;
+        Add_inter_code(Dcode);
+        strcpy(E.code[E.codenum],Dcode);
+        E.codenum++;
+        E.sym_type = 6;
+        Pop_Sym_Stack(3);
+        Push_Sym_Stack(&E);
+        break;
+    case 16:
+        E.codenum=0;
+        E.is_digit = SymStack[sym_ptr-1].is_digit;
+        E.value = SymStack[sym_ptr-1].value;
+        E.sym_type = SymStack[sym_ptr-1].sym_type;
+        strcpy(E.name,SymStack[sym_ptr-1].name);
+        for(int i=0;i<SymStack[sym_ptr-1].codenum;i++){
+            strcpy(E.code[E.codenum],SymStack[sym_ptr-1].code[i]);
+            E.codenum++;
+        }
+        E.value_pos = SymStack[sym_ptr-1].value_pos;
+        Pop_Sym_Stack(1);
+        Push_Sym_Stack(&E);
+        break;
+
+    case 17:
+        T.codenum=0;
+        T.is_digit = SymStack[sym_ptr-1].is_digit;
+        T.value = SymStack[sym_ptr-1].value;
+        T.sym_type = SymStack[sym_ptr-1].sym_type;
+        strcpy(T.name,SymStack[sym_ptr-1].name);
+        for(int i=0;i<SymStack[sym_ptr-1].codenum;i++){
+            strcpy(T.code[T.codenum],SymStack[sym_ptr-1].code[i]);
+            T.codenum++;
+        }
+        T.value_pos = SymStack[sym_ptr-1].value_pos;
+        Pop_Sym_Stack(1);
+        Push_Sym_Stack(&T);
+        break;
+
+    case 18:
+        Remove_inter_code(SymStack[sym_ptr-1].codenum);
+        Remove_inter_code(SymStack[sym_ptr-3].codenum);
+        T.codenum=0;
+        for(int i=0;i<SymStack[sym_ptr-3].codenum;i++){
+            Add_inter_code(SymStack[sym_ptr-3].code[i]);
+            strcpy(T.code[T.codenum],SymStack[sym_ptr-3].code[i]);
+            T.codenum++;
+        }
+        for(int i=0;i<SymStack[sym_ptr-1].codenum;i++){
+            Add_inter_code(SymStack[sym_ptr-1].code[i]);
+            strcpy(T.code[T.codenum],SymStack[sym_ptr-1].code[i]);
+            T.codenum++;
+        }
+        T.value_pos = used_temp_num;
+        used_temp_num++;
+        if(SymStack[sym_ptr-1].sym_type == 7){
+                if(SymStack[sym_ptr-3].sym_type == 7){
+                    sprintf(Dcode,"reg%d=reg%d*reg%d",used_temp_num,SymStack[sym_ptr-3].value_pos,SymStack[sym_ptr-1].value_pos);
+                }
+                else if(SymStack[sym_ptr-3].sym_type == 9){
+                    sprintf(Dcode,"reg%d=%s*reg%d",used_temp_num,SymStack[sym_ptr-3].name,SymStack[sym_ptr-1].value_pos);
+                }
+                else{
+                    sprintf(Dcode,"reg%d=%d*reg%d",used_temp_num,SymStack[sym_ptr-3].value,SymStack[sym_ptr-1].value_pos);
+                }
+
+        }
+        else if(SymStack[sym_ptr-1].sym_type == 9){
+                if(SymStack[sym_ptr-3].sym_type == 7){
+                    sprintf(Dcode,"reg%d=reg%d*%s",used_temp_num,SymStack[sym_ptr-3].value_pos,SymStack[sym_ptr-1].name);
+                }
+                else if(SymStack[sym_ptr-3].sym_type == 9){
+                    sprintf(Dcode,"reg%d=%s*%s",used_temp_num,SymStack[sym_ptr-3].name,SymStack[sym_ptr-1].name);
+                }
+                else{
+                    sprintf(Dcode,"reg%d=%d*%s",used_temp_num,SymStack[sym_ptr-3].value,SymStack[sym_ptr-1].name);
+                }
+        }
+        else{
+            if(SymStack[sym_ptr-3].sym_type == 7){
+                    sprintf(Dcode,"reg%d=reg%d*%d",used_temp_num,SymStack[sym_ptr-3].value_pos,SymStack[sym_ptr-1].value);
+                }
+                else if(SymStack[sym_ptr-3].sym_type == 9){
+                    sprintf(Dcode,"reg%d=%s*%d",used_temp_num,SymStack[sym_ptr-3].name,SymStack[sym_ptr-1].value);
+                }
+                else{
+                    sprintf(Dcode,"reg%d=%d*%d",used_temp_num,SymStack[sym_ptr-3].value,SymStack[sym_ptr-1].value);
+                }
+        }
+        Add_inter_code(Dcode);
+        strcpy(T.code[T.codenum],Dcode);
+        T.codenum++;
+        Pop_Sym_Stack(3);
+        Push_Sym_Stack(&T);
+        break;
+
+    case 19:
+        Remove_inter_code(SymStack[sym_ptr-1].codenum);
+        Remove_inter_code(SymStack[sym_ptr-3].codenum);
+        T.codenum=0;
+        for(int i=0;i<SymStack[sym_ptr-3].codenum;i++){
+            Add_inter_code(SymStack[sym_ptr-3].code[i]);
+            strcpy(T.code[T.codenum],SymStack[sym_ptr-3].code[i]);
+            T.codenum++;
+        }
+        for(int i=0;i<SymStack[sym_ptr-1].codenum;i++){
+            Add_inter_code(SymStack[sym_ptr-1].code[i]);
+            strcpy(T.code[T.codenum],SymStack[sym_ptr-1].code[i]);
+            T.codenum++;
+        }
+        T.value_pos = used_temp_num;
+        used_temp_num++;
+                if(SymStack[sym_ptr-1].sym_type == 7){
+                if(SymStack[sym_ptr-3].sym_type == 7){
+                    sprintf(Dcode,"reg%d=reg%d+reg%d",used_temp_num,SymStack[sym_ptr-3].value_pos,SymStack[sym_ptr-1].value_pos);
+                }
+                else if(SymStack[sym_ptr-3].sym_type == 9){
+                    sprintf(Dcode,"reg%d=%s+reg%d",used_temp_num,SymStack[sym_ptr-3].name,SymStack[sym_ptr-1].value_pos);
+                }
+                else{
+                    sprintf(Dcode,"reg%d=%d+reg%d",used_temp_num,SymStack[sym_ptr-3].value,SymStack[sym_ptr-1].value_pos);
+                }
+
+        }
+        else if(SymStack[sym_ptr-1].sym_type == 9){
+                if(SymStack[sym_ptr-3].sym_type == 7){
+                    sprintf(Dcode,"reg%d=reg%d/%s",used_temp_num,SymStack[sym_ptr-3].value_pos,SymStack[sym_ptr-1].name);
+                }
+                else if(SymStack[sym_ptr-3].sym_type == 9){
+                    sprintf(Dcode,"reg%d=%s/%s",used_temp_num,SymStack[sym_ptr-3].name,SymStack[sym_ptr-1].name);
+                }
+                else{
+                    sprintf(Dcode,"reg%d=%d/%s",used_temp_num,SymStack[sym_ptr-3].value,SymStack[sym_ptr-1].name);
+                }
+        }
+        else{
+            if(SymStack[sym_ptr-3].sym_type == 7){
+                    sprintf(Dcode,"reg%d=reg%d/%d",used_temp_num,SymStack[sym_ptr-3].value_pos,SymStack[sym_ptr-1].value);
+                }
+                else if(SymStack[sym_ptr-3].sym_type == 9){
+                    sprintf(Dcode,"reg%d=%s/%d",used_temp_num,SymStack[sym_ptr-3].name,SymStack[sym_ptr-1].value);
+                }
+                else{
+                    sprintf(Dcode,"reg%d=%d/%d",used_temp_num,SymStack[sym_ptr-3].value,SymStack[sym_ptr-1].value);
+                }
+        }
+        Add_inter_code(Dcode);
+        strcpy(T.code[T.codenum],Dcode);
+        T.codenum++;
+        Pop_Sym_Stack(3);
+        Push_Sym_Stack(&T);
+        break;
+    case 20:
+        F.codenum=0;
+        F.sym_type=7;
+        F.value = SymStack[sym_ptr-2].value;
+        F.is_digit = SymStack[sym_ptr-2].is_digit;
+        for(int i=0;i<SymStack[sym_ptr-2].codenum;i++){
+            strcpy(F.code[F.codenum],SymStack[sym_ptr-2].code[i]);
+            F.codenum++;
+        }
+        F.value_pos = SymStack[sym_ptr-2].value_pos;
+        Pop_Sym_Stack(3);
+        Push_Sym_Stack(&F);
+        break;
+    case 21:
+        F.is_digit=0;
+        F.sym_type=9;
+        F.value = SymStack[sym_ptr-1].value;
+        strcpy(F.name,SymStack[sym_ptr-1].name);
+        Pop_Sym_Stack(1);
+        Push_Sym_Stack(&F);
+        break;
+    case 22:
+        F.is_digit=1;
+        F.sym_type=23;
+        F.value = SymStack[sym_ptr-1].value;
+        F.value = SymStack[sym_ptr-1].value;
+        Pop_Sym_Stack(1);
+        Push_Sym_Stack(&F);
+        break;
+    }
+}
+
+void Insert_Symbol_id(char *name){
+    struct Sym_attr A;
+    A.sym_num = 9;
+    A.codenum = 0;
+    strcpy(A.name,name);
+    Push_Sym_Stack(&A);
+}
+
+void Insert_Symbol_digits(int digits){
+    struct Sym_attr A;
+    A.sym_num = 23;
+    A.codenum = 0;
+    A.value = digits;
+    Push_Sym_Stack(&A);
+}
+
+void Insert_Symbol(int n){
+    struct Sym_attr A;
+    A.codenum = 0;
+    A.sym_num=11;
+    A.sym_type = 11;
+    Push_Sym_Stack(&A);
+}
 
 //项的右部
     char str[10] = "P";
@@ -103,73 +1072,6 @@ char GetNextSym(){//get next symbol to be parsed
 int GOTO[200][28];//GOTO表，描述状态转移
 struct Action ACT[200][28];
 
-char Int2Sym(int a){
-switch (a){
-    case 0: return 'p'; //p = P'
-    case 1: return 'P';
-    case 2: return 'D';
-    case 3: return 'S';
-    case 4: return 'L';
-    case 5: return 'C';
-    case 6: return 'E';
-    case 7: return 'F';
-    case 8: return 'T';
-    case 9: return 'a';//a = id
-    case 10: return ';';
-    case 11: return 'b';//b = int
-    case 12: return 'c';//c = float
-    case 13: return '=';
-    case 14: return '(';
-    case 15: return ')';
-    case 16: return '>';
-    case 17: return '<';
-    case 18: return 'h';//h = '=='
-    case 19: return '+';
-    case 20: return '-';
-    case 21: return '*';
-    case 22: return '/';
-    case 23: return 'd';//d = digits
-    case 24: return 'e';//e = if
-    case 25: return 'f';//f = else
-    case 26: return 'g';//g = while
-    case 27: return '$';
-    case 28: return 'n';//n = null
-}
-return ' ';
-}
-
-int Sym2Int(char a){
-switch (a){
-    case 'p': return 0; //p = P'
-    case 'P': return 1;
-    case 'D': return 2;
-    case 'S': return 3;
-    case 'L': return 4;
-    case 'C': return 5;
-    case 'E': return 6;
-    case 'F': return 7;
-    case 'T': return 8;
-    case 'a': return 9;//a = id
-    case ';': return 10;
-    case 'b': return 11;//b = int
-    case 'c': return 12;//c = float
-    case '=': return 13;
-    case '(': return 14;
-    case ')': return 15;
-    case '>': return 16;
-    case '<': return 17;
-    case 'h': return 18;//h = '=='
-    case '+': return 19;
-    case '-': return 20;
-    case '*': return 21;
-    case '/': return 22;
-    case 'd': return 23;//d = digits
-    case 'e': return 24;//e = if
-    case 'f': return 25;//f = else
-    case 'g': return 26;//g = while
-    case '$': return 27;
-}
-}
 void Convert(char a){
 switch (a){
     case 'p': printf("P");break; //p = P'
@@ -310,6 +1212,9 @@ void PrintI(struct ISet* in){
 }
 
 void Init(){//初始化
+
+
+
     memset(GOTO,-1,sizeof(GOTO));
     memset(First,0,sizeof(First));
     memset(Follow,0,sizeof(Follow));
@@ -576,6 +1481,7 @@ void GetFollow(){
 
 int main()
 {
+    Init_Load_data();
     Init();
     GetFirst();
     GetFollow();
@@ -710,6 +1616,7 @@ for(int i=0;i<23;i++){
 */
     //PrintI(&Status[0]);
 /*
+
 for(int i=0;i<=status_num;i++){
     printf("第%d组\n",i);
     PrintI(&Status[i]);
@@ -727,9 +1634,12 @@ for(int i=0;i<=status_num;i++){
     while(1){
         char c = Datain[parse_pos];
         int cnum = Sym2Int(c);
+        int value = Value_table[parse_pos];
+        char name[10];
+        strcpy(name,Name_table[parse_pos]);
         if(c == '$'){
             if(GetStackTop() == 1){
-                printf("accept");
+                printf("accept!\n");
                 break;
             }
             /*
@@ -754,7 +1664,8 @@ for(int i=0;i<=status_num;i++){
                     //printf("pop %d statuses\n",ACT[status][cnum].reducelen);
                     int pre_status = GetStackTop();
                     //printf("jump to status %d with ptr = %d \n",pre_status,SStack.topptr);
-                    //printf("get from reduce:%c \n",Int2Sym(I[ACT[status][cnum].reduce].head));
+                    printf("get from reduce:%c \n",Int2Sym(I[ACT[status][cnum].reduce].head));
+                    Reduce_Symbol(ACT[status][cnum].reduce);
                     //printf("go to status %d \n",GOTO[pre_status][I[ACT[status][cnum].reduce].head]);
                     PushStack(GOTO[pre_status][I[ACT[status][cnum].reduce].head]);
                     //printf("push %d status to stack\n",GOTO[pre_status][I[ACT[status][cnum].reduce].head]);
@@ -764,6 +1675,18 @@ for(int i=0;i<=status_num;i++){
             }else{
             int nextstatus = GOTO[status][cnum];
             PushStack(nextstatus);
+
+            switch(cnum){
+                case 9:
+                    Insert_Symbol_id(name);
+                    break;
+                case 23:
+                    Insert_Symbol_digits(value);
+                    break;
+                default:
+                    Insert_Symbol(cnum);
+            }
+
             //printf("push %d status to stack\n",nextstatus);
             parse_pos++;
             }
@@ -777,7 +1700,8 @@ for(int i=0;i<=status_num;i++){
                     int pre_status = GetStackTop();
                     //printf("jump to status %d \n",pre_status);
                     //printf("status:%d cnum:%d reduce:%d head:%d\n",status,cnum,ACT[status][cnum].reduce,I[ACT[status][cnum].reduce].head);
-                    //printf("get from reduce:%c \n",Int2Sym(I[ACT[status][cnum].reduce].head));
+                    printf("get from reduce:%c \n",Int2Sym(I[ACT[status][cnum].reduce].head));
+                    Reduce_Symbol(ACT[status][cnum].reduce);
                     //printf("go to status %d \n",GOTO[pre_status][I[ACT[status][cnum].reduce].head]);
                     PushStack(GOTO[pre_status][I[ACT[status][cnum].reduce].head]);
                     //printf("push %d status to stack\n",GOTO[pre_status][I[ACT[status][cnum].reduce].head]);
@@ -788,12 +1712,28 @@ for(int i=0;i<=status_num;i++){
                 break;
             }
             int nextstatus = GOTO[status][cnum];
+
+            switch(cnum){
+                case 9:
+                    Insert_Symbol_id(name);
+                    break;
+                case 23:
+                    Insert_Symbol_digits(value);
+                    break;
+                default:
+                    Insert_Symbol(cnum);
+            }
+
             PushStack(nextstatus);
             //printf("push %d status to stack\n",nextstatus);
             parse_pos++;
         }
-
     }
+
+    for(int i=0;i<current_line;i++){
+        printf("%2d  %s\n",i,inter_code[i]);
+    }
+
     return 0;
 }
 
