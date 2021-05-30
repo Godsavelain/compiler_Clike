@@ -1,6 +1,49 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <malloc.h>
 #include <string.h>
+
+//for lexical analysis
+char Data_in[200];
+int symbol_num=0;
+
+int Symbol_value[100]={0};
+char Symbol_id[100][10]={'\0'};
+
+int row = 0;
+struct table_item{
+       char w_name[20];
+       int w_kind;// 1 identifier 2 number const 3 char const
+       int w_type;
+       int w_val;
+       int w_addr;
+       struct table_item* item_next;
+};
+struct table_item *table_head,*table_tail;
+
+void ShowError(){
+  printf("Error at row %d\n",row );
+}
+
+void Get_Code_Context(){
+    FILE *fp;
+	if((fp=fopen("srcinput.txt","wb"))==NULL)
+	{
+		printf("\nopen file Fail,close!");
+		getchar();
+		exit(1);
+	}
+    char str[50] = "\0";
+    printf("please input your codes;each line with an enter\ninput '-1' to exit\n");
+    while(gets(str)){
+        if(strcmp(str,"-1")==0)
+            break;
+        fputs(str,fp);
+    }
+    fclose(fp);
+}
+
+//for grammar analysis
 
 char Int2Sym(int a){
 switch (a){
@@ -71,31 +114,18 @@ switch (a){
 }
 
 //symbols loaded
-char Datain[100] = "ba;ba;ba;a=d;a=d;a=d;e(a>a)a=a+a+d;fa=a-a;$";
-int Value_table[100]={0};
+char Datain[100];
+//char Datain[100] = "ba;ba;ba;a=d;a=d;a=d;e(a>a)a=a+a+d;fa=a-a;$";
+int  Value_table[100]={0};
 char Name_table[100][10];
 int parse_pos=0;//the position of the current symbol under parse
 
 void Init_Load_data(){
-    Value_table[11]=1;
-    Value_table[15]=2;
-    Value_table[19]=1;
-    Value_table[33]=3;
-
-    strcpy(Name_table[1],"a");
-    strcpy(Name_table[4],"b");
-    strcpy(Name_table[7],"c");
-    strcpy(Name_table[9],"a");
-    strcpy(Name_table[13],"b");
-    strcpy(Name_table[17],"c");
-    strcpy(Name_table[23],"a");
-    strcpy(Name_table[25],"b");
-    strcpy(Name_table[27],"a");
-    strcpy(Name_table[29],"a");
-    strcpy(Name_table[31],"b");
-    strcpy(Name_table[36],"a");
-    strcpy(Name_table[38],"a");
-    strcpy(Name_table[40],"c");
+    strcpy(Datain,Data_in);
+    for(int i=0;i<100;i++){
+        Value_table[i]=Symbol_value[i];
+        strcpy(Name_table[i],Symbol_id[i]);
+    }
 }
 
 char inter_code[100][20];//生成的三地址代码
@@ -129,7 +159,7 @@ int sym_ptr = 0;
 
 void Push_Sym_Stack(struct Sym_attr *in){
     //printf("sym_ptr before push %d\n",sym_ptr);
-    printf("push %c\n",Int2Sym(in->sym_num));
+    //printf("push %c\n",Int2Sym(in->sym_num));
     SymStack[sym_ptr].sym_num = in->sym_num;
     SymStack[sym_ptr].sym_type = in->sym_type;
     SymStack[sym_ptr].value = in->value;
@@ -196,7 +226,7 @@ int AddSym(struct Symbol in){
 }
 
 void Reduce_Symbol(int num){//reduce symbol with item num
-    printf("Reduce Sym %d\n",num);
+    //printf("Reduce Sym %d\n",num);
     struct Symbol temp;//Symbol be initialized
     int err;
     int L1;
@@ -233,7 +263,7 @@ void Reduce_Symbol(int num){//reduce symbol with item num
     char Dcode[100];//just a temp string
     switch(num){
     case 23:
-        printf("init %s\n",SymStack[sym_ptr-2].name);
+        //printf("init %s\n",SymStack[sym_ptr-2].name);
         temp.has_init = 0;
         strcpy(temp.name,SymStack[sym_ptr-2].name);
         temp.sym_type = SymStack[sym_ptr-3].sym_type;
@@ -257,7 +287,7 @@ void Reduce_Symbol(int num){//reduce symbol with item num
         Push_Sym_Stack(&D);
         break;
     case 2:
-        printf("init %s\n",SymStack[sym_ptr-2].name);
+        //printf("init %s\n",SymStack[sym_ptr-2].name);
         temp.has_init = 0;
         strcpy(temp.name,SymStack[sym_ptr-3].name);
         temp.sym_type = SymStack[sym_ptr-4].sym_type;
@@ -323,10 +353,10 @@ void Reduce_Symbol(int num){//reduce symbol with item num
 
         strcpy(S.code[S.codenum],Dcode);
         S.codenum++;
-        printf("\n");
-        printf("= get %d codes from S\n",SymStack[sym_ptr-2].codenum);
-        printf("POP SYM %c\n",Int2Sym(SymStack[sym_ptr-2].sym_num));
-        printf("\n");
+        //printf("\n");
+        //printf("= get %d codes from S\n",SymStack[sym_ptr-2].codenum);
+        //printf("POP SYM %c\n",Int2Sym(SymStack[sym_ptr-2].sym_num));
+        //printf("\n");
         //S.value_pos =
 
         Add_inter_code(Dcode);
@@ -369,9 +399,9 @@ void Reduce_Symbol(int num){//reduce symbol with item num
         for(int i=0;i<SymStack[sym_ptr-5].codenum+1;i++){
             strcpy(S.code[i],SymStack[sym_ptr-5].code[i]);
         }
-        printf("\n");
-        printf("POP SYM %c\n",Int2Sym(SymStack[sym_ptr-1].sym_num));
-        printf("\n");
+        //printf("\n");
+        //printf("POP SYM %c\n",Int2Sym(SymStack[sym_ptr-1].sym_num));
+        //printf("\n");
 
         Remove_inter_code(SymStack[sym_ptr-1].codenum);
 
@@ -644,19 +674,19 @@ void Reduce_Symbol(int num){//reduce symbol with item num
         Remove_inter_code(SymStack[sym_ptr-1].codenum);
         Remove_inter_code(SymStack[sym_ptr-3].codenum);
         E.codenum=0;
-        printf("\n");
-        printf("add get %d codes from S2\n",SymStack[sym_ptr-3].codenum);
-        printf("POP SYM %c\n",Int2Sym(SymStack[sym_ptr-3].sym_num));
-        printf("\n");
+        //printf("\n");
+        //printf("add get %d codes from S2\n",SymStack[sym_ptr-3].codenum);
+        //printf("POP SYM %c\n",Int2Sym(SymStack[sym_ptr-3].sym_num));
+        //printf("\n");
         for(int i=0;i<SymStack[sym_ptr-3].codenum;i++){
             Add_inter_code(SymStack[sym_ptr-3].code[i]);
             strcpy(E.code[E.codenum],SymStack[sym_ptr-3].code[i]);
             E.codenum++;
         }
-        printf("\n");
-        printf("add get %d codes from S1\n",SymStack[sym_ptr-1].codenum);
-        printf("POP SYM %c\n",Int2Sym(SymStack[sym_ptr-1].sym_num));
-        printf("\n");
+        //printf("\n");
+        //printf("add get %d codes from S1\n",SymStack[sym_ptr-1].codenum);
+        //printf("POP SYM %c\n",Int2Sym(SymStack[sym_ptr-1].sym_num));
+        //printf("\n");
         for(int i=0;i<SymStack[sym_ptr-1].codenum;i++){
             Add_inter_code(SymStack[sym_ptr-1].code[i]);
             strcpy(E.code[E.codenum],SymStack[sym_ptr-1].code[i]);
@@ -712,19 +742,19 @@ void Reduce_Symbol(int num){//reduce symbol with item num
     	Remove_inter_code(SymStack[sym_ptr-1].codenum);
         Remove_inter_code(SymStack[sym_ptr-3].codenum);
         E.codenum=0;
-        printf("\n");
-        printf("sub get %d codes from S2\n",SymStack[sym_ptr-3].codenum);
-        printf("POP SYM %c\n",Int2Sym(SymStack[sym_ptr-3].sym_num));
-        printf("\n");
+        //printf("\n");
+        //printf("sub get %d codes from S2\n",SymStack[sym_ptr-3].codenum);
+        //printf("POP SYM %c\n",Int2Sym(SymStack[sym_ptr-3].sym_num));
+        //printf("\n");
         for(int i=0;i<SymStack[sym_ptr-3].codenum;i++){
             Add_inter_code(SymStack[sym_ptr-3].code[i]);
             strcpy(E.code[E.codenum],SymStack[sym_ptr-3].code[i]);
             E.codenum++;
         }
-        printf("\n");
-        printf("sub get %d codes from S2\n",SymStack[sym_ptr-1].codenum);
-        printf("POP SYM %c\n",Int2Sym(SymStack[sym_ptr-1].sym_num));
-        printf("\n");
+        //printf("\n");
+        //printf("sub get %d codes from S2\n",SymStack[sym_ptr-1].codenum);
+        //printf("POP SYM %c\n",Int2Sym(SymStack[sym_ptr-1].sym_num));
+        //printf("\n");
         for(int i=0;i<SymStack[sym_ptr-1].codenum;i++){
             Add_inter_code(SymStack[sym_ptr-1].code[i]);
             strcpy(E.code[E.codenum],SymStack[sym_ptr-1].code[i]);
@@ -1184,37 +1214,7 @@ int ItemValid(struct ISet* in,int j){//若in在j项有效，返回1
     return 1;
 }
 
-void PrintI(struct ISet* in){
-    for(int k=0;k<24;k++){//打印第k个表达式
-        if(in->validItem[k] == 1){
-            for(int i=0;i<10;i++){
-            if(in->SetItem[k][i] == 1){
-            //printf("%d:",k);
-            //printf("i: %d:",i);
-            printf("%c->",Int2Sym(I[k].head));
-            //printf("S:%s\n",I[k].body);
-            for(int m=0;m<I[k].len;m++){
-                if(m==i){
-                    printf("%c",'.');
-                    //printf("%c",I[k].body[0]);
-                    Convert(I[k].body[m]);
-                }
-                else{
-                    Convert(I[k].body[m]);
-                    //printf("%c",I[k].body[0]);
-                }
-            }
-            printf("\n");
-        }
-        }
-        }
-    }
-}
-
 void Init(){//初始化
-
-
-
     memset(GOTO,-1,sizeof(GOTO));
     memset(First,0,sizeof(First));
     memset(Follow,0,sizeof(Follow));
@@ -1481,8 +1481,417 @@ void GetFollow(){
 
 int main()
 {
-    Init_Load_data();
+   int after_else = 0;
+   Get_Code_Context();
+   char sentance_input[200];
+   char word_token[20];
+   char next_c;
+   int w_forward=0,w_next=0;
+   int w_state=0;
+   int x_num=0,id_x=0;
+
+
+   char w_keyword[][8]={"if","else","while","do","int","float"};
+
+   FILE *fp_soure;
+   table_head =(struct table_item *)malloc(sizeof(struct table_item));
+   table_tail =(struct table_item *)malloc(sizeof(struct table_item));
+
+   table_tail=table_head=NULL;
+   fp_soure=fopen("srcinput.txt", "r+");
+
+
+   if (fp_soure!=NULL)
+   {
+      memset(sentance_input, 0x00, sizeof (char) * 200);
+      printf("Token generated:\n");
+
+      //reading all lines
+      while(EOF != fscanf(fp_soure,"%[^\n]\n",sentance_input)){ //%*c
+       //printf("the input is %s \n",sentance_input);
+       row++;
+       w_next=0;
+       w_forward=0;
+       w_state=0;
+       x_num=0;
+
+       while(1){
+        switch (w_state){
+           case 0:
+
+                 // deleting the backspaces in front of line
+                 while((next_c=sentance_input[w_next])==' ' || next_c=='\t' ){// || next_c=='\t'
+                      w_next++;
+                      w_forward++;
+                 }
+                 memset(word_token, 0x00, sizeof (char) * 20);
+                 x_num=0;
+
+                // processing the digits
+                if (isdigit(next_c)){
+                     while( (next_c!=' ') && (isdigit(next_c) || next_c=='.')){ //
+                          w_next++;
+                          next_c=sentance_input[w_next];
+                     }
+
+                     if(next_c==' '|| !(isalpha(next_c)))
+                        w_next--;
+                     if(isalpha(next_c))
+                        {
+                          ShowError();
+                        }
+
+                     x_num=0;
+                     while(w_forward<=w_next){
+                        word_token[x_num]=sentance_input[w_forward];
+                        w_forward++;
+                        x_num++;
+                     }
+                     word_token[w_forward+1]='\0';
+                     printf("token is [ const digits ,%s]\n",word_token);
+                     //strcpy(Symbol_id[symbol_num],word_token);
+                     Data_in[symbol_num] = 'd';
+                     int num = atoi(word_token);
+                     Symbol_value[symbol_num] = num;
+                     symbol_num++;
+
+                    w_state=0;
+                    w_next= w_forward;
+                    break;
+                }
+                // processing the id
+                if (isalpha(next_c)){
+
+                     while( (next_c!=' ') && (isalpha(next_c) || isalnum(next_c) || next_c=='_')){
+                          w_next++;
+                          next_c=sentance_input[w_next];
+
+                     }
+
+                     if(next_c==' ' || !(isalpha(next_c)))
+                        w_next--;
+
+                     x_num=0;
+                     while(w_forward<=w_next){
+                        word_token[x_num]=sentance_input[w_forward];
+                        w_forward++;
+                        x_num++;
+                     }
+                     word_token[w_forward+1]='\0';
+                     //printf("token is %s\n",word_token);
+
+                     for(int i=0;i<6;i++){
+                        //printf("word_token:%s  w_keyword[i]:%s\n",word_token,w_keyword[i]);
+                        if(strcmp(word_token,w_keyword[i])==0){
+                          printf("token is [ keyword ,%s]\n",word_token);
+                          id_x=1;//keyword not in table
+                            switch(i){
+                            case 0:
+                                Data_in[symbol_num] = 'e';
+                                symbol_num++;
+                                break;
+                            case 1:
+                                Data_in[symbol_num] = 'f';
+                                symbol_num++;
+                                after_else=1;
+                                break;
+                            case 2:
+
+                                Data_in[symbol_num] = 'g';
+                                symbol_num++;
+                                break;
+                            case 3:
+                                break;
+                            case 4:
+
+                                Data_in[symbol_num] = 'b';
+                                symbol_num++;
+                                break;
+                            case 5:
+
+                                Data_in[symbol_num] = 'c';
+                                symbol_num++;
+                                break;
+                            }
+                          break;
+                        }
+                    }
+                    if (id_x==0){
+                        printf("token is [ id ,%s]\n",word_token);
+                        strcpy(Symbol_id[symbol_num],word_token);
+                        Data_in[symbol_num] = 'a';
+                        symbol_num++;
+                    }
+
+                    w_state=0;
+                    id_x=0;
+                    w_next= w_forward;
+                    break;
+                 }
+                 // processing the relation operators, the calculating operators and the other operators.
+                  switch (next_c){
+                     case '<':w_state=1;
+                              break;
+                     case '=':w_state=5;
+                              break;
+                     case '>':w_state=6;
+                              break;
+                     case '+':w_state=9;
+                              break;
+                     case '-':w_state=10;
+                              break;
+                     case '*':w_state=11;
+                               break;
+                     case '/':w_state=12;
+                              break;
+                     case '(':w_state=13;
+                              break;
+                     case ')':w_state=14;
+                              break;
+                     case ';':w_state=15;
+                              break;
+                     case '!':w_state=16;
+                              break;
+                     case '\'':w_state=17;
+                              break;
+                    case '\0':w_state=100;
+                              //sentance_input="";
+                              memset(sentance_input, 0x00, sizeof (char) * 200);
+                              break;
+                    //default : printf("error!");break;
+                    }
+
+                    //printf("state is %d\n",w_state);
+                    break;
+            case 1:
+                  w_next++;
+                  next_c=sentance_input[w_next];
+                  switch (next_c){
+                    case '=': w_state=2;
+                             break;
+                    case '>': w_state=3;
+                             break;
+                    default: w_state=4;
+                             Data_in[symbol_num] = '<';
+                             symbol_num++;
+                             break;
+                  }
+
+                  break;
+            case 2:
+                  x_num=0;
+                  while(w_forward<=w_next){
+                    word_token[x_num]=sentance_input[w_forward];
+                    w_forward++;
+                    x_num++;
+                  }
+                  word_token[w_forward+1]='\0';
+                  printf("token is [ op ,%s]\n",word_token);
+                  w_state=0;
+                  w_next= w_forward;
+                  break;
+             case 3:
+
+                  x_num=0;
+                  while(w_forward<=w_next){
+                    word_token[x_num]=sentance_input[w_forward];
+                    w_forward++;
+                    x_num++;
+                  }
+                  word_token[w_forward+1]='\0';
+                  printf("token is [ op ,%s]\n",word_token);
+                  w_state=0;
+                  w_next= w_forward;
+                  break;
+             case 4:
+                  w_next--;
+
+                  x_num=0;
+                  while(w_forward<=w_next){
+                    word_token[x_num]=sentance_input[w_forward];
+                    w_forward++;
+                    x_num++;
+                  }
+                  word_token[w_forward]='\0';
+                  printf("token is [ op ,%s]\n",word_token);
+                  w_state=0;
+                  w_next= w_forward;
+                  break;
+             case 5:
+                  x_num=0;
+                  if( sentance_input[w_next+1] == '='){
+                          w_next++;
+                          next_c=sentance_input[w_next];
+                     }
+                  while(w_forward<=w_next){
+                    word_token[x_num]=sentance_input[w_forward];
+                    w_forward++;
+                    x_num++;
+                  }
+                  word_token[w_forward]='\0';
+                  printf("token is [ op ,%s]\n",word_token);
+                  Data_in[symbol_num] = '=';
+                  symbol_num++;
+                  w_state=0;
+                  w_next= w_forward;
+                  break;
+             case 9:
+             case 10:
+             case 11:
+             case 12:
+             case 13:
+             case 14:
+             case 15:
+             case 17:
+                 switch(w_state){
+                 case 9:
+                    Data_in[symbol_num] = '+';
+                    symbol_num++;
+                    break;
+                 case 10:
+                    Data_in[symbol_num] = '-';
+                    symbol_num++;
+                    break;
+                 case 11:
+                    Data_in[symbol_num] = '*';
+                    symbol_num++;
+                    break;
+                 case 12:
+                    Data_in[symbol_num] = '/';
+                    symbol_num++;
+                    break;
+                 case 13:
+                    Data_in[symbol_num] = '(';
+                    symbol_num++;
+                    break;
+                 case 14:
+                    Data_in[symbol_num] = ')';
+                    symbol_num++;
+                    break;
+                 case 15:
+                     //printf("after_else:%d\n",after_else);
+                    if(after_else==0){
+                    Data_in[symbol_num] = ';';
+                    symbol_num++;
+                    }
+
+                    break;
+
+                 }
+                  x_num=0;
+                  while(w_forward<=w_next){
+                    word_token[x_num]=sentance_input[w_forward];
+                    w_forward++;
+                    x_num++;
+                  }
+                  word_token[w_forward]='\0';
+                  if(!((strcmp(word_token,";")==0)&&(after_else==1)))
+                  {
+                      printf("token is [ op ,%s]\n",word_token);
+                  }
+                        if(after_else == 1){
+                        after_else = 0;
+                      }
+
+                  w_state=0;
+                  w_next= w_forward;
+                  break;
+             case 16:
+                  x_num=0;
+                  if( sentance_input[w_next+1] == '='){
+                          w_next++;
+                          next_c=sentance_input[w_next];
+                     }
+                  else
+                    ShowError();
+                  while(w_forward<=w_next){
+                    word_token[x_num]=sentance_input[w_forward];
+                    w_forward++;
+                    x_num++;
+                  }
+                  word_token[w_forward]='\0';
+                  printf("token is [ op ,%s]\n",word_token);
+                  w_state=0;
+                  w_next= w_forward;
+                  break;
+             case 6:
+                  w_next++;
+                  next_c=sentance_input[w_next];
+                  switch (next_c){
+                    case '=': w_state=7;
+                             break;
+                    default: w_state=8;
+                             Data_in[symbol_num] = '>';
+                             symbol_num++;
+                             break;
+                  }
+
+                  break;
+             case 7:
+                  x_num=0;
+                  while(w_forward<=w_next){
+                    word_token[x_num]=sentance_input[w_forward];
+                    w_forward++;
+                    x_num++;
+                  }
+                  word_token[w_forward]='\0';
+                  printf("token is [ op ,%s]\n",word_token);
+                  w_state=0;
+                  w_next= w_forward;
+                  break;
+             case 8:
+                  w_next--;
+                  x_num=0;
+                  while(w_forward<=w_next){
+                    word_token[x_num]=sentance_input[w_forward];
+                    w_forward++;
+                    x_num++;
+                  }
+                  word_token[w_forward]='\0';
+                  printf("token is [ op ,%s]\n",word_token);
+                  w_state=0;
+                  w_next= w_forward;
+                  break;
+             case 100: break;
+        }
+        if (w_state==100) break;
+      }
+
+    }
+    fclose(fp_soure);
+   }
+   else{
+     printf("open file error!\n");
+   }
+   Data_in[symbol_num] = '$';
+   symbol_num++;
+   Data_in[symbol_num] = '\0';
+
+
+
+
+/*
+printf("\n");
+printf("data in: \n");
+printf("%s\n",Data_in);
+printf("\n");
+printf("id in: \n");
+for(int i=0;i<symbol_num-1;i++){
+    printf("%d:%s ",i,Symbol_id[i]);
+}
+printf("\n");
+printf("value in: \n");
+for(int i=0;i<symbol_num-1;i++){
+printf("%3d",Symbol_value[i]);
+}
+*/
+printf("lexical analysis has completed,press any key to start grammar analysis\n");
+printf("grammar analysis can only use '=' '>' '<' '==' '+' '-' '*' '/' '(' ')' 'if' 'else' 'while'\n");
+//printf("Data_in:%s\n",Data_in);
+    //for grammar analysis
     Init();
+    Init_Load_data();
+    //printf("%s\n",Datain);
     GetFirst();
     GetFollow();
 
@@ -1639,7 +2048,10 @@ for(int i=0;i<=status_num;i++){
         strcpy(name,Name_table[parse_pos]);
         if(c == '$'){
             if(GetStackTop() == 1){
+                printf("\n");
+                printf("grammar analysis answer:");
                 printf("accept!\n");
+                printf("\n");
                 break;
             }
             /*
@@ -1664,7 +2076,7 @@ for(int i=0;i<=status_num;i++){
                     //printf("pop %d statuses\n",ACT[status][cnum].reducelen);
                     int pre_status = GetStackTop();
                     //printf("jump to status %d with ptr = %d \n",pre_status,SStack.topptr);
-                    printf("get from reduce:%c \n",Int2Sym(I[ACT[status][cnum].reduce].head));
+                    //printf("get from reduce:%c \n",Int2Sym(I[ACT[status][cnum].reduce].head));
                     Reduce_Symbol(ACT[status][cnum].reduce);
                     //printf("go to status %d \n",GOTO[pre_status][I[ACT[status][cnum].reduce].head]);
                     PushStack(GOTO[pre_status][I[ACT[status][cnum].reduce].head]);
@@ -1700,7 +2112,7 @@ for(int i=0;i<=status_num;i++){
                     int pre_status = GetStackTop();
                     //printf("jump to status %d \n",pre_status);
                     //printf("status:%d cnum:%d reduce:%d head:%d\n",status,cnum,ACT[status][cnum].reduce,I[ACT[status][cnum].reduce].head);
-                    printf("get from reduce:%c \n",Int2Sym(I[ACT[status][cnum].reduce].head));
+                    //printf("get from reduce:%c \n",Int2Sym(I[ACT[status][cnum].reduce].head));
                     Reduce_Symbol(ACT[status][cnum].reduce);
                     //printf("go to status %d \n",GOTO[pre_status][I[ACT[status][cnum].reduce].head]);
                     PushStack(GOTO[pre_status][I[ACT[status][cnum].reduce].head]);
@@ -1730,10 +2142,29 @@ for(int i=0;i<=status_num;i++){
         }
     }
 
+    printf("final code generated\n");
     for(int i=0;i<current_line;i++){
         printf("%2d  %s\n",i,inter_code[i]);
     }
+    printf("\n");
+    printf("symbol table:\n");
 
+
+    for(int i=0;i<sym_number;i++){
+
+        switch(Symtable[i].sym_type)
+    {
+        case 11:
+        printf("symbol type:int  ");
+        break;
+        case 12:
+        printf("symbol type:int  ");
+        break;
+    }
+
+        printf("symbol name:%s\n",Symtable[i].name);
+
+    }
     return 0;
 }
 
