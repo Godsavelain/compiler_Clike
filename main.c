@@ -38,6 +38,12 @@ void Get_Code_Context(){
     while(gets(str)){
         if(strcmp(str,"-1")==0)
             break;
+        if(strcmp(str,"else")==0)
+            {
+                fputs(str,fp);
+                fputs(";",fp);
+                continue;
+            }
         fputs(str,fp);
     }
     fclose(fp);
@@ -360,7 +366,10 @@ void Reduce_Symbol(int num){//reduce symbol with item num
         //S.value_pos =
 
         Add_inter_code(Dcode);
-        ChangeSym(SymStack[sym_ptr-4].name,SymStack[sym_ptr-2].value_pos);
+        err = ChangeSym(SymStack[sym_ptr-4].name,SymStack[sym_ptr-2].value_pos);
+        if(err){
+            printf("error:identifier used before identified\n");;
+        }
         Pop_Sym_Stack(4);
         Push_Sym_Stack(&S);
 
@@ -1658,7 +1667,12 @@ int main()
                               //sentance_input="";
                               memset(sentance_input, 0x00, sizeof (char) * 200);
                               break;
-                    //default : printf("error!");break;
+                    default :
+                        printf("lexical analysis error:An unrecognized keyword %c was found\n",next_c);
+                        w_state=0;
+                        w_next++;
+                        w_forward++;
+                        break;
                     }
 
                     //printf("state is %d\n",w_state);
@@ -1853,6 +1867,7 @@ int main()
                   w_next= w_forward;
                   break;
              case 100: break;
+
         }
         if (w_state==100) break;
       }
@@ -1887,6 +1902,7 @@ printf("%3d",Symbol_value[i]);
 */
 printf("lexical analysis has completed,press any key to start grammar analysis\n");
 printf("grammar analysis can only use '=' '>' '<' '==' '+' '-' '*' '/' '(' ')' 'if' 'else' 'while'\n");
+getchar();
 //printf("Data_in:%s\n",Data_in);
     //for grammar analysis
     Init();
@@ -2082,7 +2098,8 @@ for(int i=0;i<=status_num;i++){
                     PushStack(GOTO[pre_status][I[ACT[status][cnum].reduce].head]);
                     //printf("push %d status to stack\n",GOTO[pre_status][I[ACT[status][cnum].reduce].head]);
         }else if(ACT[status][cnum].status_code == 0){
-                printf("error");
+                printf("grammar analysis error\n");
+                exit(1);
                 break;
             }else{
             int nextstatus = GOTO[status][cnum];
